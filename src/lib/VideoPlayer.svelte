@@ -11,10 +11,18 @@
   let volume = $state(1);
   let isMuted = $state(false);
 
+  // Playback Speed State
+  let userPlaybackRate = $state(1.0);
+  const availableSpeeds = [1.0, 1.25, 1.5, 2.0];
+
   // UI state
   let showControls = $state(false);
   let isDragging = $state(false);
   let controlsTimeout;
+
+  // Speed Indicator State
+  let showSpeedIndicator = $state(false);
+  let speedIndicatorTimeout;
 
   function handleLoadedMetadata() {
     if (videoElement) {
@@ -54,7 +62,7 @@
     if (!paused && !isDragging) {
       controlsTimeout = setTimeout(() => {
         showControls = false;
-      }, 2500);
+      }, 1000);
     }
   }
 
@@ -81,11 +89,159 @@
     showControls = true;
   }
 
+  // Keyboard controls state
+  // Space (Play/Pause/Speed)
+  let isSpaceDown = false;
+  let spaceTimer;
+  let isSpaceLongPress = false;
+
+  // Arrows (Seek)
+  let isArrowDown = false;
+  let arrowTimer;
+  let seekInterval;
+  let rewindRequest;
+  let isArrowLongPress = false;
+
+  function handleKeyDown(e) {
+    // Space Logic
+    if (e.code === "Space") {
+      e.preventDefault();
+      if (isSpaceDown) return;
+      isSpaceDown = true;
+      isSpaceLongPress = false;
+
+      spaceTimer = setTimeout(() => {
+        if (!videoElement) return;
+        videoElement.playbackRate = 2.0;
+        isSpaceLongPress = true;
+        // If long press activates, ensure we are playing
+        if (videoElement.paused) {
+          videoElement.play();
+        }
+      }, 200);
+      return;
+    }
+
+    // Arrow Logic: Seek and Speed
+    if (e.code.startsWith("Arrow")) {
+      e.preventDefault();
+
+      // Speed Control (Up/Down)
+      if (e.code === "ArrowUp" || e.code === "ArrowDown") {
+        if (!videoElement) return;
+        const currentIndex = availableSpeeds.indexOf(userPlaybackRate);
+        let newIndex = currentIndex;
+
+        if (e.code === "ArrowUp") {
+          newIndex = Math.min(availableSpeeds.length - 1, currentIndex + 1);
+        } else {
+          newIndex = Math.max(0, currentIndex - 1);
+        }
+
+        if (newIndex !== currentIndex) {
+          userPlaybackRate = availableSpeeds[newIndex];
+          videoElement.playbackRate = userPlaybackRate;
+
+          // Show speed indicator
+          showSpeedIndicator = true;
+          clearTimeout(speedIndicatorTimeout);
+          speedIndicatorTimeout = setTimeout(() => {
+            showSpeedIndicator = false;
+          }, 500);
+        }
+        return;
+      }
+
+      // Seek Logic (Left/Right)
+      if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+        if (isArrowDown) return;
+        isArrowDown = true;
+        isArrowLongPress = false;
+
+        const isRight = e.code === "ArrowRight";
+
+        arrowTimer = setTimeout(() => {
+          isArrowLongPress = true;
+          showControls = true;
+          clearTimeout(controlsTimeout);
+
+          if (!videoElement) return;
+
+          if (isRight) {
+            // 16x Forward
+            videoElement.playbackRate = 16.0;
+            if (videoElement.paused) videoElement.play();
+          } else {
+            // Rewind (Long press disabled for now)
+            // videoElement.pause();
+            // ... (disabled)
+          }
+        }, 200);
+      }
+    }
+  }
+
+  function handleKeyUp(e) {
+    // Space Logic
+    if (e.code === "Space") {
+      e.preventDefault();
+      isSpaceDown = false;
+      clearTimeout(spaceTimer);
+
+      if (isSpaceLongPress) {
+        if (videoElement) {
+          videoElement.playbackRate = userPlaybackRate;
+        }
+      } else {
+        togglePlay();
+      }
+      return;
+    }
+
+    // Arrow Logic
+    if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+      e.preventDefault();
+      // Only handle if this was the active arrow action
+      if (!isArrowDown) return;
+
+      isArrowDown = false;
+      clearTimeout(arrowTimer);
+      clearInterval(seekInterval);
+      if (rewindRequest) cancelAnimationFrame(rewindRequest);
+
+      if (!isArrowLongPress) {
+        // Short press action: 1s jump
+        if (videoElement) {
+          const isRight = e.code === "ArrowRight";
+          const direction = isRight ? 1 : -1;
+          videoElement.currentTime = Math.max(
+            0,
+            Math.min(duration, videoElement.currentTime + direction),
+          );
+        }
+      } else {
+        // Long press release - Restore normal speed
+        if (videoElement) {
+          videoElement.playbackRate = userPlaybackRate;
+          if (videoElement.paused) videoElement.play();
+        }
+        handleMouseMove(); // Reset controls timeout
+      }
+    }
+  }
+
   // Cleanup timeout on destroy
   onDestroy(() => {
     clearTimeout(controlsTimeout);
+    clearTimeout(spaceTimer);
+    clearTimeout(arrowTimer);
+    clearTimeout(speedIndicatorTimeout);
+    clearInterval(seekInterval);
+    if (rewindRequest) cancelAnimationFrame(rewindRequest);
   });
 </script>
+
+<svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
 
 <!-- Container triggers controls visibility -->
 <div
@@ -135,6 +291,15 @@
       </div>
     </div>
   {/if}
+
+  <!-- Speed Indicator (Top Right) -->
+  <div
+    class="absolute top-8 right-8 bg-black/50 backdrop-blur-md text-white/90 px-4 py-2 rounded-lg text-lg font-medium transition-opacity duration-200 pointer-events-none"
+    class:opacity-0={!showSpeedIndicator}
+    class:opacity-100={showSpeedIndicator}
+  >
+    {userPlaybackRate}x
+  </div>
 
   <!-- Bottom Controls Bar -->
   <div
