@@ -5,6 +5,20 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 let mainWindow;
+let fileToOpen = null;
+
+// Handle file associations on macOS
+app.on('open-file', (event, path) => {
+    event.preventDefault();
+    fileToOpen = path;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('open-file', path);
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+    } else if (app.isReady()) {
+        createWindow();
+    }
+});
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -17,6 +31,7 @@ function createWindow() {
             preload: path.join(__dirname, 'preload.cjs'),
             contextIsolation: true,
             nodeIntegration: false,
+            webSecurity: false,
         },
         backgroundColor: '#000000',
     });
@@ -33,6 +48,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
     createWindow();
+
+    ipcMain.handle('get-initial-file', () => fileToOpen);
 
     ipcMain.on('resize-window', (event, { width, height }) => {
         console.log('Main process received resize-window:', width, height);

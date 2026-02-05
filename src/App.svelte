@@ -1,8 +1,35 @@
 <script>
+  import { onMount } from "svelte";
   import VideoPlayer from "./lib/VideoPlayer.svelte";
 
   let videoSrc = $state(null);
   let isDragging = $state(false);
+
+  function loadVideoFromFilePath(path) {
+    if (videoSrc && videoSrc.startsWith("blob:")) {
+      URL.revokeObjectURL(videoSrc);
+    }
+    // file:// protocol is needed for local files in Electron.
+    // Encode the path to handle spaces and special characters.
+    // We replace # and ? manually because encodeURI doesn't touch them.
+    const encodedPath = encodeURI(path)
+      .replace(/#/g, "%23")
+      .replace(/\?/g, "%3F");
+    videoSrc = `file://${encodedPath}`;
+  }
+
+  onMount(async () => {
+    if (window.electronAPI) {
+      const initialFile = await window.electronAPI.getInitialFile();
+      if (initialFile) {
+        loadVideoFromFilePath(initialFile);
+      }
+
+      window.electronAPI.onOpenFile((path) => {
+        loadVideoFromFilePath(path);
+      });
+    }
+  });
 
   function handleDrop(e) {
     e.preventDefault();
@@ -17,7 +44,7 @@
         file.name.match(/\.(mp4|mkv|webm|mov|avi)$/i)
       ) {
         // Revoke previous URL if exists to free memory
-        if (videoSrc) {
+        if (videoSrc && videoSrc.startsWith("blob:")) {
           URL.revokeObjectURL(videoSrc);
         }
         videoSrc = URL.createObjectURL(file);

@@ -35,6 +35,21 @@
       "dist/**/*",
       "electron/**/*"
     ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "mp4",
+          "mkv",
+          "avi",
+          "mov",
+          "webm",
+          "m4v"
+        ],
+        "name": "Video",
+        "description": "Video File",
+        "role": "Viewer"
+      }
+    ],
     "mac": {
       "target": "dmg"
     },
