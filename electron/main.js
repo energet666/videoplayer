@@ -1,0 +1,73 @@
+import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+let mainWindow;
+
+function createWindow() {
+    mainWindow = new BrowserWindow({
+        width: 800,
+        height: 600,
+        frame: false,
+        titleBarStyle: 'hidden',
+        hasShadow: false,
+        webPreferences: {
+            preload: path.join(__dirname, 'preload.cjs'),
+            contextIsolation: true,
+            nodeIntegration: false,
+        },
+        backgroundColor: '#000000',
+    });
+
+    const isDev = process.env.NODE_ENV === 'development';
+
+    if (isDev) {
+        mainWindow.loadURL('http://localhost:5173');
+        mainWindow.webContents.openDevTools({ mode: 'detach' });
+    } else {
+        mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
+    }
+}
+
+app.whenReady().then(() => {
+    createWindow();
+
+    ipcMain.on('resize-window', (event, { width, height }) => {
+        console.log('Main process received resize-window:', width, height);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
+            const { width: screenWidth, height: screenHeight } = currentScreen.workAreaSize;
+
+            // Padding to ensure window doesn't touch screen edges
+            const padding = 100;
+            const availableWidth = screenWidth - padding;
+            const availableHeight = screenHeight - padding;
+
+            let newWidth = width;
+            let newHeight = height;
+
+            // Check if scaling is needed
+            if (newWidth > availableWidth || newHeight > availableHeight) {
+                const widthRatio = availableWidth / width;
+                const heightRatio = availableHeight / height;
+                const scale = Math.min(widthRatio, heightRatio); // Scale down to fit
+
+                newWidth = width * scale;
+                newHeight = height * scale;
+            }
+
+            mainWindow.setContentSize(Math.floor(newWidth), Math.floor(newHeight));
+            mainWindow.center();
+        }
+    });
+
+    app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+});
+
+app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit();
+});
