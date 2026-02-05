@@ -22,5 +22,22 @@
     "tailwindcss": "^4.1.18",
     "vite": "^7.2.4",
     "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.videoplayer.app",
+    "productName": "VideoPlayer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
   }
 }
