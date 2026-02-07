@@ -1,8 +1,8 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from "svelte";
 
-  let { videoSrc } = $props();
-  let videoElement;
+  let { videoSrc }: { videoSrc: string | null } = $props();
+  let videoElement: HTMLVideoElement;
 
   // Video state
   let paused = $state(true);
@@ -19,11 +19,11 @@
   // UI state
   let showControls = $state(false);
   let isDragging = $state(false);
-  let controlsTimeout;
+  let controlsTimeout: ReturnType<typeof setTimeout>;
 
   // Speed Indicator State
   let showSpeedIndicator = $state(false);
-  let speedIndicatorTimeout;
+  let speedIndicatorTimeout: ReturnType<typeof setTimeout>;
 
   function handleLoadedMetadata() {
     if (videoElement) {
@@ -37,7 +37,7 @@
     }
   }
 
-  function formatTime(seconds) {
+  function formatTime(seconds: number) {
     if (!seconds && seconds !== 0) return "0:00";
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
@@ -52,8 +52,9 @@
     }
   }
 
-  function handleSeek(e) {
-    const time = parseFloat(e.target.value);
+  function handleSeek(e: Event) {
+    const target = e.target as HTMLInputElement;
+    const time = parseFloat(target.value);
     videoElement.currentTime = time;
   }
 
@@ -67,8 +68,9 @@
     }
   }
 
-  function handleVolumeChange(e) {
-    volume = parseFloat(e.target.value);
+  function handleVolumeChange(e: Event) {
+    const target = e.target as HTMLInputElement;
+    volume = parseFloat(target.value);
     videoElement.volume = volume;
     isMuted = volume === 0;
   }
@@ -88,9 +90,13 @@
 
   function toggleFullscreen() {
     if (!document.fullscreenElement) {
-      videoElement.parentNode.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable fullscreen: ${err.message}`);
-      });
+      (videoElement.parentNode as HTMLElement)
+        .requestFullscreen()
+        .catch((err) => {
+          console.error(
+            `Error attempting to enable fullscreen: ${err.message}`,
+          );
+        });
     } else {
       document.exitFullscreen();
     }
@@ -104,17 +110,16 @@
   // Keyboard controls state
   // Space (Play/Pause/Speed)
   let isSpaceDown = false;
-  let spaceTimer;
+  let spaceTimer: ReturnType<typeof setTimeout>;
   let isSpaceLongPress = false;
 
   // Arrows (Seek)
   let isArrowDown = false;
-  let arrowTimer;
-  let seekInterval;
-  let rewindRequest;
+  let arrowTimer: ReturnType<typeof setTimeout>;
+  let seekInterval: ReturnType<typeof setInterval>;
   let isArrowLongPress = false;
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: KeyboardEvent) {
     // Space Logic
     if (e.code === "Space") {
       e.preventDefault();
@@ -202,7 +207,7 @@
     }
   }
 
-  function handleKeyUp(e) {
+  function handleKeyUp(e: KeyboardEvent) {
     // Space Logic
     if (e.code === "Space") {
       e.preventDefault();
@@ -228,7 +233,6 @@
       isArrowDown = false;
       clearTimeout(arrowTimer);
       clearInterval(seekInterval);
-      if (rewindRequest) cancelAnimationFrame(rewindRequest);
 
       if (!isArrowLongPress) {
         // Short press action: 1s jump
@@ -258,7 +262,6 @@
     clearTimeout(arrowTimer);
     clearTimeout(speedIndicatorTimeout);
     clearInterval(seekInterval);
-    if (rewindRequest) cancelAnimationFrame(rewindRequest);
   });
 </script>
 

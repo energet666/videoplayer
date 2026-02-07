@@ -1,11 +1,11 @@
-<script>
+<script lang="ts">
   import { onMount } from "svelte";
   import VideoPlayer from "./lib/VideoPlayer.svelte";
 
-  let videoSrc = $state(null);
+  let videoSrc = $state<string | null>(null);
   let isDragging = $state(false);
 
-  function loadVideoFromFilePath(path) {
+  function loadVideoFromFilePath(path: string) {
     if (videoSrc && videoSrc.startsWith("blob:")) {
       URL.revokeObjectURL(videoSrc);
     }
@@ -31,7 +31,7 @@
     }
   });
 
-  function handleDrop(e) {
+  function handleDrop(e: DragEvent) {
     e.preventDefault();
     isDragging = false;
 
@@ -54,12 +54,12 @@
     }
   }
 
-  function handleDragOver(e) {
+  function handleDragOver(e: DragEvent) {
     e.preventDefault();
     isDragging = true;
   }
 
-  function handleDragLeave(e) {
+  function handleDragLeave(e: DragEvent) {
     e.preventDefault();
     // Only set to false if we are leaving the window, not just entering a child
     if (e.relatedTarget === null) {

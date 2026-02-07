@@ -81,3 +81,9 @@
 - [x] macOS: Сборка в `.dmg`.
 - [x] Windows: Сборка в Portable `.exe` (x64).
 - [x] Скрипты `npm run build:mac` и `npm run build:win`.
+
+## 10. Миграция на TypeScript
+- [x] Установка зависимостей (`typescript`, `svelte-check`, etc.).
+- [x] Конфигурация `tsconfig.json`.
+- [x] Конвертация скриптов (`.js` -> `.ts`) и компонентов (`lang="ts"`).
+- [x] Типизация основных компонентов (`VideoPlayer.svelte`, `App.svelte`).
