@@ -297,7 +297,7 @@
       class:opacity-0={!showControls}
     >
       <div
-        class="bg-black/30 backdrop-blur-sm p-6 rounded-full text-white/90 shadow-2xl transition-transform scale-100"
+        class="bg-black/30 p-6 rounded-full text-white/90 shadow-2xl transition-transform scale-100"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -327,13 +327,14 @@
 
   <!-- Bottom Controls Bar -->
   <div
-    class="absolute bottom-0 left-0 right-0 p-4 transition-opacity duration-300 ease-in-out bg-linear-to-t from-black/80 to-transparent pt-12"
-    class:opacity-0={!showControls}
-    class:opacity-100={showControls}
+    class="absolute bottom-8 left-0 right-0 flex justify-center items-end px-4 pb-4 transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
+    class:translate-y-48={!showControls}
+    class:translate-y-0={showControls}
+    class:pointer-events-none={!showControls}
   >
-    <!-- Glass Panel -->
+    <!-- Liquid Glass Panel -->
     <div
-      class="bg-white/10 backdrop-blur-md rounded-2xl p-3 flex flex-row items-center gap-4 border border-white/5 shadow-lg"
+      class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-row items-center gap-5 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu"
     >
       <!-- Play/Pause Button -->
       <button
