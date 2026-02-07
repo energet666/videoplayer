@@ -10,9 +10,11 @@
     togglePip,
   } from "./logic/video-actions";
   import { KeyboardHandler } from "./logic/keyboard.svelte";
+  import { TouchpadHandler } from "./logic/touchpad.svelte";
 
   let { videoSrc }: { videoSrc: string | null } = $props();
   let videoElement: HTMLVideoElement = $state() as any; // $state() for element binding in Svelte 5
+  let videoContainer: HTMLDivElement | undefined = $state();
 
   // Video state
   let paused = $state(true);
@@ -50,7 +52,7 @@
   // We use a getter for videoElement because it might be undefined initially
   const keyboardHandler = new KeyboardHandler(() => videoElement, {
     getPlaybackRate: () => userPlaybackRate,
-    setPlaybackRate: (rate) => {
+    setPlaybackRate: (rate: number) => {
       userPlaybackRate = rate;
     },
     getDuration: () => duration,
@@ -62,6 +64,11 @@
         showSpeedIndicator = false;
       }, 500);
     },
+  });
+
+  // Initialize Touchpad Handler
+  const touchpadHandler = new TouchpadHandler(() => videoElement, {
+    onShowControls: handleMouseMove,
   });
 
   function handleLoadedMetadata() {
@@ -102,6 +109,18 @@
     };
   });
 
+  $effect(() => {
+    if (!videoContainer) return;
+
+    const handler = (e: WheelEvent) => touchpadHandler.handleWheel(e);
+    // Add passive: false to prevent browser navigation gestures
+    videoContainer.addEventListener("wheel", handler, { passive: false });
+
+    return () => {
+      videoContainer?.removeEventListener("wheel", handler);
+    };
+  });
+
   // Cleanup timeout on destroy
   onDestroy(() => {
     clearTimeout(controlsTimeout);
@@ -117,6 +136,7 @@
 
 <!-- Container triggers controls visibility -->
 <div
+  bind:this={videoContainer}
   class="relative w-full h-full bg-black group overflow-hidden"
   class:cursor-none={!showControls}
   role="application"
