@@ -135,8 +135,14 @@
   $effect(() => {
     if (!videoElement) return;
 
-    const onEnterPiP = () => (isPip = true);
-    const onLeavePiP = () => (isPip = false);
+    const onEnterPiP = () => {
+      isPip = true;
+      window.electronAPI?.hideWindow();
+    };
+    const onLeavePiP = () => {
+      isPip = false;
+      window.electronAPI?.showWindow();
+    };
 
     videoElement.addEventListener("enterpictureinpicture", onEnterPiP);
     videoElement.addEventListener("leavepictureinpicture", onLeavePiP);

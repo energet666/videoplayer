@@ -82,7 +82,20 @@ app.whenReady().then(() => {
         }
     });
 
+    ipcMain.on('hide-window', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.hide();
+        }
+    });
+
+    ipcMain.on('show-window', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.show();
+        }
+    });
+
     app.on('activate', () => {
+
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });
 });

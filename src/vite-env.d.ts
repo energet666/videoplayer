@@ -6,5 +6,7 @@ interface Window {
         getInitialFile: () => Promise<string | null>;
         onOpenFile: (callback: (path: string) => void) => void;
         resizeWindow: (width: number, height: number) => void;
+        hideWindow: () => void;
+        showWindow: () => void;
     };
 }
