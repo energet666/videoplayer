@@ -20,10 +20,8 @@ export class TouchpadHandler {
         const videoElement = this.getVideo();
         if (!videoElement) return;
 
-        // Calculate seek amount
-        // deltaX > 0 means swipe left (move forward in content -> forward in time)
-        // deltaX < 0 means swipe right (move backward in content -> backward in time)
-        const seekAmount = e.deltaX * this.sensitivity;
+        // Calculate seek amount with inverted direction
+        const seekAmount = -1 * e.deltaX * this.sensitivity;
 
         videoElement.currentTime = Math.max(
             0,
