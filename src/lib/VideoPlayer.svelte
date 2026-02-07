@@ -60,7 +60,7 @@
   function handleMouseMove() {
     showControls = true;
     clearTimeout(controlsTimeout);
-    if (!paused && !isDragging) {
+    if (!isDragging) {
       controlsTimeout = setTimeout(() => {
         showControls = false;
       }, 1000);
@@ -267,12 +267,12 @@
 <!-- Container triggers controls visibility -->
 <div
   class="relative w-full h-full bg-black group overflow-hidden"
-  class:cursor-none={!showControls && !paused}
+  class:cursor-none={!showControls}
   role="application"
   ondblclick={toggleFullscreen}
   onmousemove={handleMouseMove}
   onmouseleave={() => {
-    if (!paused) showControls = false;
+    showControls = false;
   }}
 >
   <!-- Main Video -->
@@ -293,7 +293,8 @@
   <!-- Big Center Play Button (only when paused) -->
   {#if paused}
     <div
-      class="absolute inset-0 flex items-center justify-center pointer-events-none"
+      class="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300"
+      class:opacity-0={!showControls}
     >
       <div
         class="bg-black/30 backdrop-blur-sm p-6 rounded-full text-white/90 shadow-2xl transition-transform scale-100"
@@ -327,8 +328,8 @@
   <!-- Bottom Controls Bar -->
   <div
     class="absolute bottom-0 left-0 right-0 p-4 transition-opacity duration-300 ease-in-out bg-linear-to-t from-black/80 to-transparent pt-12"
-    class:opacity-0={!showControls && !paused}
-    class:opacity-100={showControls || paused}
+    class:opacity-0={!showControls}
+    class:opacity-100={showControls}
   >
     <!-- Glass Panel -->
     <div
