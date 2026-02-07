@@ -46,9 +46,17 @@
     return `${m}:${s.toString().padStart(2, "0")}`;
   }
 
+  function safePlay() {
+    videoElement?.play()?.catch((e) => {
+      if (e.name !== "AbortError") {
+        console.error("Play error:", e);
+      }
+    });
+  }
+
   function togglePlay() {
     if (videoElement.paused) {
-      videoElement.play();
+      safePlay();
     } else {
       videoElement.pause();
     }
@@ -135,7 +143,7 @@
         isSpaceLongPress = true;
         // If long press activates, ensure we are playing
         if (videoElement.paused) {
-          videoElement.play();
+          safePlay();
         }
       }, 200);
       return;
@@ -192,7 +200,7 @@
           if (isRight) {
             // 16x Forward
             videoElement.playbackRate = 16.0;
-            if (videoElement.paused) videoElement.play();
+            if (videoElement.paused) safePlay();
           } else {
             // Rewind: Jump back 3s every 300ms
             const doRewind = () => {
@@ -250,7 +258,7 @@
         // Long press release - Restore normal speed
         if (videoElement) {
           videoElement.playbackRate = userPlaybackRate;
-          if (videoElement.paused) videoElement.play();
+          if (videoElement.paused) safePlay();
         }
         handleMouseMove(); // Reset controls timeout
       }
