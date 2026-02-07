@@ -19,6 +19,7 @@
   // UI state
   let showControls = $state(false);
   let isDragging = $state(false);
+  let isMouseOverControls = $state(false);
   let controlsTimeout: ReturnType<typeof setTimeout>;
 
   // Speed Indicator State
@@ -61,7 +62,7 @@
   function handleMouseMove() {
     showControls = true;
     clearTimeout(controlsTimeout);
-    if (!isDragging) {
+    if (!isDragging && !isMouseOverControls) {
       controlsTimeout = setTimeout(() => {
         showControls = false;
       }, 1000);
@@ -338,6 +339,16 @@
     <!-- Liquid Glass Panel -->
     <div
       class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 sm:gap-5 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu transition-all duration-300"
+      onmouseenter={() => {
+        isMouseOverControls = true;
+        clearTimeout(controlsTimeout);
+      }}
+      onmouseleave={() => {
+        isMouseOverControls = false;
+        handleMouseMove();
+      }}
+      role="toolbar"
+      tabindex="-1"
     >
       <!-- Play/Pause Button -->
       <button
