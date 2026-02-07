@@ -27,6 +27,9 @@
   let showSpeedIndicator = $state(false);
   let speedIndicatorTimeout: ReturnType<typeof setTimeout>;
 
+  // PiP State
+  let isPip = $state(false);
+
   function handleLoadedMetadata() {
     if (videoElement) {
       const width = videoElement.videoWidth;
@@ -112,10 +115,37 @@
     }
   }
 
+  async function togglePip() {
+    try {
+      if (document.pictureInPictureElement) {
+        await document.exitPictureInPicture();
+      } else if (document.pictureInPictureEnabled && videoElement) {
+        await videoElement.requestPictureInPicture();
+      }
+    } catch (error) {
+      console.error("PiP error:", error);
+    }
+  }
+
   function onEnd() {
     paused = true;
     showControls = true;
   }
+
+  $effect(() => {
+    if (!videoElement) return;
+
+    const onEnterPiP = () => (isPip = true);
+    const onLeavePiP = () => (isPip = false);
+
+    videoElement.addEventListener("enterpictureinpicture", onEnterPiP);
+    videoElement.addEventListener("leavepictureinpicture", onLeavePiP);
+
+    return () => {
+      videoElement.removeEventListener("enterpictureinpicture", onEnterPiP);
+      videoElement.removeEventListener("leavepictureinpicture", onLeavePiP);
+    };
+  });
 
   // Keyboard controls state
   // Space (Play/Pause/Speed)
@@ -387,6 +417,14 @@
       <span class="text-xs font-medium text-white/50 w-8 text-right shrink-0"
         >{formatTime(duration)}</span
       >
+
+      <button
+        onclick={togglePip}
+        class="text-white/80 hover:text-white transition-colors ml-2"
+        title="Picture in Picture"
+      >
+        {@html icons.pip}
+      </button>
 
       <!-- Volume -->
       <div class="flex items-center gap-2 group/vol shrink-0">
