@@ -338,7 +338,7 @@
   >
     <!-- Liquid Glass Panel -->
     <div
-      class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 sm:gap-5 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu transition-all duration-300"
+      class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-nowrap items-center justify-start gap-3 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu transition-all duration-300"
       onmouseenter={() => {
         isMouseOverControls = true;
         clearTimeout(controlsTimeout);
@@ -350,46 +350,13 @@
       role="toolbar"
       tabindex="-1"
     >
-      <!-- Play/Pause Button -->
-      <button
-        onclick={togglePlay}
-        class="text-white/90 hover:text-white transition-colors focus:outline-none shrink-0"
-      >
-        {#if paused}
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            ><polygon points="5 3 19 12 5 21 5 3"></polygon></svg
-          >
-        {:else}
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            ><rect x="6" y="4" width="4" height="16"></rect><rect
-              x="14"
-              y="4"
-              width="4"
-              height="16"
-            ></rect></svg
-          >
-        {/if}
-      </button>
-
       <!-- Current Time -->
-      <span class="text-xs font-medium text-white/70 w-10 text-right shrink-0"
+      <span class="text-xs font-medium text-white/70 w-8 shrink-0"
         >{formatTime(currentTime)}</span
       >
 
       <!-- Progress Bar -->
-      <div
-        class="relative w-full sm:w-auto sm:flex-1 h-8 flex items-center group/slider order-first sm:order-none"
-      >
+      <div class="relative flex-1 h-8 flex items-center group/slider">
         <input
           type="range"
           min="0"
@@ -420,7 +387,7 @@
       </div>
 
       <!-- Duration -->
-      <span class="text-xs font-medium text-white/50 w-10 shrink-0"
+      <span class="text-xs font-medium text-white/50 w-8 text-right shrink-0"
         >{formatTime(duration)}</span
       >
 
@@ -473,7 +440,7 @@
           step="0.05"
           value={volume}
           oninput={handleVolumeChange}
-          class="w-20 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 android-slider"
+          class="w-12 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 android-slider"
         />
       </div>
     </div>

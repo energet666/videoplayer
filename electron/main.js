@@ -34,6 +34,8 @@ function createWindow() {
             webSecurity: false,
         },
         backgroundColor: '#000000',
+        minWidth: 320,
+        minHeight: 240,
     });
 
     const isDev = process.env.NODE_ENV === 'development';
