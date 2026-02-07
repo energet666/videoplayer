@@ -9,6 +9,7 @@
   let duration = $state(0);
   let currentTime = $state(0);
   let volume = $state(1);
+  let lastVolume = $state(1);
   let isMuted = $state(false);
 
   // Playback Speed State
@@ -74,13 +75,24 @@
 
   function toggleMute() {
     if (isMuted) {
-      videoElement.volume = 1;
-      volume = 1;
+      volume = lastVolume || 1;
+      videoElement.volume = volume;
       isMuted = false;
     } else {
+      lastVolume = volume;
       videoElement.volume = 0;
       volume = 0;
       isMuted = true;
+    }
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      videoElement.parentNode.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable fullscreen: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
     }
   }
 
@@ -161,6 +173,9 @@
         const isRight = e.code === "ArrowRight";
 
         arrowTimer = setTimeout(() => {
+          // Disable rewind on hold (Left Arrow) per user request
+          // if (!isRight) return; -> Removed to enable rewind
+
           isArrowLongPress = true;
           showControls = true;
           clearTimeout(controlsTimeout);
@@ -172,9 +187,15 @@
             videoElement.playbackRate = 16.0;
             if (videoElement.paused) videoElement.play();
           } else {
-            // Rewind (Long press disabled for now)
-            // videoElement.pause();
-            // ... (disabled)
+            // Rewind: Jump back 3s every 300ms
+            const doRewind = () => {
+              videoElement.currentTime = Math.max(
+                0,
+                videoElement.currentTime - 3,
+              );
+            };
+            doRewind(); // Immediate execution
+            seekInterval = setInterval(doRewind, 300);
           }
         }, 200);
       }
@@ -246,7 +267,9 @@
 <!-- Container triggers controls visibility -->
 <div
   class="relative w-full h-full bg-black group overflow-hidden"
+  class:cursor-none={!showControls && !paused}
   role="application"
+  ondblclick={toggleFullscreen}
   onmousemove={handleMouseMove}
   onmouseleave={() => {
     if (!paused) showControls = false;
