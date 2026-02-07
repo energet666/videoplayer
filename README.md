@@ -1,43 +1,82 @@
-# Svelte + Vite
+# VideoPlayer
 
-This template should help get you started developing with Svelte in Vite.
+Этот проект представляет собой видеоплеер, построенный с использованием:
+- **Svelte 5** (Vite)
+- **Electron**
+- **TailwindCSS**
 
-## Recommended IDE Setup
+## Предварительные требования
 
-[VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode).
+Перед началом работы убедитесь, что у вас установлены:
+- [Node.js](https://nodejs.org/) (версия 18 или новее)
+- npm (обычно идет в комплекте с Node.js)
 
-## Need an official Svelte framework?
+## Установка
 
-Check out [SvelteKit](https://github.com/sveltejs/kit#readme), which is also powered by Vite. Deploy anywhere with its serverless-first approach and adapt to various platforms, with out of the box support for TypeScript, SCSS, and Less, and easily-added support for mdsvex, GraphQL, PostCSS, Tailwind CSS, and more.
+1. Склонируйте репозиторий:
+   ```bash
+   git clone <URL_репозитория>
+   cd videoplayer
+   ```
+   *(Если вы уже находитесь в папке проекта, просто перейдите к следующему шагу)*
 
-## Technical considerations
+2. Установите зависимости:
+   ```bash
+   npm install
+   ```
 
-**Why use this over SvelteKit?**
+## Разработка и отладка
 
-- It brings its own routing solution which might not be preferable for some users.
-- It is first and foremost a framework that just happens to use Vite under the hood, not a Vite app.
+Для запуска проекта в режиме разработки выполните команду:
 
-This template contains as little as possible to get started with Vite + Svelte, while taking into account the developer experience with regards to HMR and intellisense. It demonstrates capabilities on par with the other `create-vite` templates and is a good starting point for beginners dipping their toes into a Vite + Svelte project.
-
-Should you later need the extended capabilities and extensibility provided by SvelteKit, the template has been structured similarly to SvelteKit so that it is easy to migrate.
-
-**Why include `.vscode/extensions.json`?**
-
-Other templates indirectly recommend extensions via the README, but this file allows VS Code to prompt the user to install the recommended extension upon opening the project.
-
-**Why enable `checkJs` in the JS template?**
-
-It is likely that most cases of changing variable types in runtime are likely to be accidental, rather than deliberate. This provides advanced typechecking out of the box. Should you like to take advantage of the dynamically-typed nature of JavaScript, it is trivial to change the configuration.
-
-**Why is HMR not preserving my local component state?**
-
-HMR state preservation comes with a number of gotchas! It has been disabled by default in both `svelte-hmr` and `@sveltejs/vite-plugin-svelte` due to its often surprising behavior. You can read the details [here](https://github.com/sveltejs/svelte-hmr/tree/master/packages/svelte-hmr#preservation-of-local-state).
-
-If you have state that's important to retain within a component, consider creating an external store which would not be replaced by HMR.
-
-```js
-// store.js
-// An extremely simple external store
-import { writable } from 'svelte/store'
-export default writable(0)
+```bash
+npm run dev
 ```
+
+Эта команда запускает:
+1. Vite сервер (для фронтенда Svelte) на порту `5173`.
+2. Electron (основной процесс), который подключается к этому серверу.
+
+### Отладка
+
+- **Frontend (Svelte)**:
+  - Используйте **Инструменты разработчика (DevTools)**, встроенные в окно Electron.
+  - Чтобы открыть их, нажмите `Cmd+Option+I` (macOS) или `Ctrl+Shift+I` (Windows/Linux), либо выберите `View -> Toggle Developer Tools` в меню приложения.
+  - Изменения в коде Svelte применяются автоматически (HMR - Hot Module Replacement).
+
+- **Backend (Electron Main Process)**:
+  - Логи основного процесса (`electron/main.js`) выводятся в терминал, в котором вы запустили `npm run dev`.
+  - При изменении файлов в папке `electron/`, приложение автоматически перезагрузится (если настроено, иначе потребуется перезапуск процесса `npm run dev`).
+
+## Сборка проекта
+
+Чтобы собрать приложение для распространения (создать установочные файлы или исполняемый файл), используйте следующие команды:
+
+### Сборка для текущей платформы
+
+```bash
+npm run build
+```
+
+Результаты сборки будут находиться в папке `release`.
+
+### Сборка для конкретных платформ
+
+- **macOS** (DMG):
+  ```bash
+  npm run build:mac
+  ```
+
+- **Windows** (Portable exe):
+  ```bash
+  npm run build:win
+  ```
+
+> **Важно**: Для сборки под другую ОС (например, сборка Windows-версии на Mac) может потребоваться дополнительная настройка или использование CI/CD, но `electron-builder` часто справляется с этим автоматически, если не требуется компиляция нативных модулей.
+
+## Структура проекта
+
+- **src/**: Исходный код Svelte приложения (компоненты, логика интерфейса).
+- **electron/**: Исходный код главного процесса Electron (`main.js`, `preload.cjs`).
+- **dist/**: Папка с собранными файлами фронтенда (создается Vite при сборке, используется в production).
+- **release/**: Папка с готовыми установочными файлами приложения (создается electron-builder).
