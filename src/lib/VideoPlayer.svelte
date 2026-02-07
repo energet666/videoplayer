@@ -334,7 +334,7 @@
   >
     <!-- Liquid Glass Panel -->
     <div
-      class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-row items-center gap-5 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu"
+      class="bg-black/40 backdrop-blur-2xl backdrop-saturate-150 rounded-3xl py-3 px-6 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-x-4 gap-y-2 sm:gap-5 border border-white/10 shadow-2xl w-full max-w-2xl transform-gpu transition-all duration-300"
     >
       <!-- Play/Pause Button -->
       <button
@@ -373,7 +373,9 @@
       >
 
       <!-- Progress Bar -->
-      <div class="relative flex-1 h-8 flex items-center group/slider">
+      <div
+        class="relative w-full sm:w-auto sm:flex-1 h-8 flex items-center group/slider order-first sm:order-none"
+      >
         <input
           type="range"
           min="0"
