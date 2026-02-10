@@ -49,6 +49,19 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+    // Check for file argument on Windows/Linux
+    if (process.platform === 'win32' || process.platform === 'linux') {
+        const argv = process.argv;
+        const isDev = process.env.NODE_ENV === 'development';
+        // In production: argv[0] is exe, argv[1] is file
+        // In dev: argv[0] is electron, argv[1] is ., argv[2] is file
+        const fileArgIndex = isDev ? 2 : 1;
+        
+        if (argv.length > fileArgIndex) {
+            fileToOpen = argv[fileArgIndex];
+        }
+    }
+
     createWindow();
 
     ipcMain.handle('get-initial-file', () => fileToOpen);
