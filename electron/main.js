@@ -16,6 +16,9 @@ app.on('open-file', (event, path) => {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
     } else if (app.isReady()) {
+        if (process.platform === 'darwin') {
+            app.dock.setIcon(path.join(__dirname, '../build/icon.png'));
+        }
         createWindow();
     }
 });
@@ -36,6 +39,7 @@ function createWindow() {
         backgroundColor: '#000000',
         minWidth: 320,
         minHeight: 240,
+        icon: path.join(__dirname, '../build/icon.png')
     });
 
     const isDev = process.env.NODE_ENV === 'development';
@@ -56,10 +60,14 @@ app.whenReady().then(() => {
         // In production: argv[0] is exe, argv[1] is file
         // In dev: argv[0] is electron, argv[1] is ., argv[2] is file
         const fileArgIndex = isDev ? 2 : 1;
-        
+
         if (argv.length > fileArgIndex) {
             fileToOpen = argv[fileArgIndex];
         }
+    }
+
+    if (process.platform === 'darwin') {
+        app.dock.setIcon(path.join(__dirname, '../build/icon.png'));
     }
 
     createWindow();
