@@ -16,7 +16,7 @@ app.on('open-file', (event, path) => {
         if (mainWindow.isMinimized()) mainWindow.restore();
         mainWindow.focus();
     } else if (app.isReady()) {
-        if (process.platform === 'darwin') {
+        if (process.platform === 'darwin' && process.env.NODE_ENV === 'development') {
             app.dock.setIcon(path.join(__dirname, '../build/icon.png'));
         }
         createWindow();
@@ -39,7 +39,7 @@ function createWindow() {
         backgroundColor: '#000000',
         minWidth: 320,
         minHeight: 240,
-        icon: path.join(__dirname, '../build/icon.png')
+        ...(process.env.NODE_ENV === 'development' ? { icon: path.join(__dirname, '../build/icon.png') } : {})
     });
 
     const isDev = process.env.NODE_ENV === 'development';
@@ -66,7 +66,7 @@ app.whenReady().then(() => {
         }
     }
 
-    if (process.platform === 'darwin') {
+    if (process.platform === 'darwin' && process.env.NODE_ENV === 'development') {
         app.dock.setIcon(path.join(__dirname, '../build/icon.png'));
     }
 
