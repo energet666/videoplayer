@@ -5,28 +5,22 @@
   let videoSrc = $state<string | null>(null);
   let isDragging = $state(false);
 
-  function loadVideoFromFilePath(path: string) {
+  function loadVideo(url: string) {
     if (videoSrc && videoSrc.startsWith("blob:")) {
       URL.revokeObjectURL(videoSrc);
     }
-    // file:// protocol is needed for local files in Electron.
-    // Encode the path to handle spaces and special characters.
-    // We replace # and ? manually because encodeURI doesn't touch them.
-    const encodedPath = encodeURI(path)
-      .replace(/#/g, "%23")
-      .replace(/\?/g, "%3F");
-    videoSrc = `file://${encodedPath}`;
+    videoSrc = url;
   }
 
   onMount(async () => {
     if (window.electronAPI) {
       const initialFile = await window.electronAPI.getInitialFile();
       if (initialFile) {
-        loadVideoFromFilePath(initialFile);
+        loadVideo(initialFile);
       }
 
-      window.electronAPI.onOpenFile((path) => {
-        loadVideoFromFilePath(path);
+      window.electronAPI.onOpenFile((fileURL) => {
+        loadVideo(fileURL);
       });
     }
   });
