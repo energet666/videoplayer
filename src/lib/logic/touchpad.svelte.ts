@@ -1,6 +1,5 @@
 export class TouchpadHandler {
     private sensitivity = 0.05; // Seconds per pixel of delta
-    private isProcessing = false;
 
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,

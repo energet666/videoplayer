@@ -83,7 +83,6 @@ if (!gotTheLock) {
             height: 600,
             frame: false,
             titleBarStyle: 'hidden',
-            hasShadow: false,
             webPreferences: {
                 preload: path.join(__dirname, 'preload.cjs'),
                 contextIsolation: true,
