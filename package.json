@@ -1,7 +1,7 @@
 {
-  "name": "videoplayer",
+  "name": "x-stas-player",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -32,8 +32,8 @@
     "wait-on": "^7.2.0"
   },
   "build": {
-    "appId": "com.videoplayer.app",
-    "productName": "VideoPlayer",
+    "appId": "com.x-stas-player.app",
+    "productName": "X-Stas-Player",
     "directories": {
       "output": "release"
     },
@@ -65,8 +65,7 @@
         {
           "target": "nsis",
           "arch": [
-            "x64",
-            "arm64"
+            "x64"
           ]
         }
       ],
