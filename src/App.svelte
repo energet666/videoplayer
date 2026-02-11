@@ -88,21 +88,177 @@
       style="-webkit-app-region: drag;"
     ></div>
 
-    <!-- Drop Zone (Non-Draggable) -->
+    <!-- Welcome Screen -->
     <div
       class="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none"
     >
       <div
-        class="border-2 border-dashed border-gray-600 rounded-xl p-12 bg-gray-900/50 backdrop-blur-sm transition-colors duration-300 transform scale-100"
-        class:bg-gray-800={isDragging}
+        class="flex flex-col items-center gap-6 max-w-sm w-full px-6 transition-transform duration-300"
         class:scale-105={isDragging}
       >
-        <h1 class="text-3xl font-light mb-2 tracking-wider text-gray-200">
-          Drag & Drop
-        </h1>
-        <p class="text-gray-500 text-xs uppercase tracking-widest text-center">
-          Video File Here
-        </p>
+        <!-- Drop Video Icon -->
+        <div class="flex flex-col items-center">
+          <svg
+            class="w-20 h-20 transition-colors duration-300"
+            class:text-blue-400={isDragging}
+            viewBox="0 0 80 80"
+            fill="none"
+          >
+            <!-- Film strip body -->
+            <rect
+              x="10"
+              y="12"
+              width="60"
+              height="44"
+              rx="4"
+              stroke="currentColor"
+              stroke-width="2"
+              class="text-gray-600"
+            />
+            <!-- Sprocket holes left -->
+            <rect
+              x="14"
+              y="17"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="14"
+              y="25"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="14"
+              y="33"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="14"
+              y="41"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <!-- Sprocket holes right -->
+            <rect
+              x="61"
+              y="17"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="61"
+              y="25"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="61"
+              y="33"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <rect
+              x="61"
+              y="41"
+              width="5"
+              height="4"
+              rx="1"
+              fill="currentColor"
+              class="text-gray-600"
+            />
+            <!-- Play triangle -->
+            <path
+              d="M35 26 L35 42 L49 34 Z"
+              fill="currentColor"
+              class="text-gray-500"
+            />
+            <!-- Arrow down -->
+            <line
+              x1="40"
+              y1="52"
+              x2="40"
+              y2="72"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              class="text-gray-500"
+              class:text-blue-400={isDragging}
+            />
+            <polyline
+              points="33,65 40,72 47,65"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-gray-500"
+              class:text-blue-400={isDragging}
+            />
+          </svg>
+        </div>
+
+        <!-- Divider -->
+        <div class="w-full border-t border-gray-800"></div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="w-full text-sm text-gray-500 space-y-2">
+          <p
+            class="text-gray-400 text-[11px] uppercase tracking-widest font-medium mb-3 text-center"
+          >
+            Управление
+          </p>
+          <div class="grid grid-cols-[90px_1fr] gap-x-5 gap-y-2.5 items-center">
+            <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
+            <span>Пауза / Воспроизведение</span>
+
+            <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
+            <span>Зажать — ускорение ×2</span>
+
+            <div class="flex gap-1">
+              <kbd class="flex-1">←</kbd><kbd class="flex-1">→</kbd>
+            </div>
+            <span>Перемотка ±1 сек</span>
+
+            <div class="flex gap-1">
+              <kbd class="flex-1">←</kbd><kbd class="flex-1">→</kbd>
+            </div>
+            <span>Зажать — быстрая перемотка</span>
+
+            <div class="flex gap-1">
+              <kbd class="flex-1">↑</kbd><kbd class="flex-1">↓</kbd>
+            </div>
+            <span>Скорость воспроизведения</span>
+
+            <div
+              class="flex justify-center items-center h-[28px] text-gray-400 font-mono text-sm"
+            >
+              2×клик
+            </div>
+            <span>Полноэкранный режим</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -117,3 +273,24 @@
     {/if}
   {/if}
 </main>
+
+<style>
+  kbd {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 14px;
+    text-align: center;
+    background: linear-gradient(180deg, #2a2a2e 0%, #1e1e22 100%);
+    border: 1px solid #3a3a40;
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    color: #d4d4d8;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    white-space: nowrap;
+  }
+</style>
