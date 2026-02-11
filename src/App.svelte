@@ -34,10 +34,7 @@
     if (dt && dt.files && dt.files.length > 0) {
       const file = dt.files[0];
       // Check if video
-      if (
-        file.type.startsWith("video/") ||
-        file.name.match(/\.(mp4|mkv|webm|mov|avi)$/i)
-      ) {
+      if (file.type.startsWith("video/") || file.name.match(/\.(mp4|webm)$/i)) {
         // Revoke previous URL if exists to free memory
         if (videoSrc && videoSrc.startsWith("blob:")) {
           URL.revokeObjectURL(videoSrc);
@@ -98,8 +95,11 @@
         class:scale-105={isDragging}
       >
         <!-- Drop Video Icon -->
-        <div class="flex flex-col items-center">
+        <div class="flex flex-col items-center gap-2">
           <DropVideoIcon {isDragging} />
+          <p class="text-xs text-gray-500 font-medium tracking-wide">
+            MP4 • WebM
+          </p>
         </div>
 
         <!-- Divider -->
@@ -107,11 +107,6 @@
 
         <!-- Keyboard Shortcuts -->
         <div class="w-full text-sm text-gray-500 space-y-2">
-          <p
-            class="text-gray-400 text-[11px] uppercase tracking-widest font-medium mb-3 text-center"
-          >
-            Управление
-          </p>
           <div class="grid grid-cols-[90px_1fr] gap-x-5 gap-y-2.5 items-center">
             <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
             <span>Пауза / Воспроизведение</span>
