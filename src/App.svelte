@@ -64,7 +64,7 @@
 </script>
 
 <main
-  class="w-screen h-screen bg-black overflow-hidden relative flex items-center justify-center text-white select-none"
+  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-white select-none"
   ondrop={handleDrop}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
@@ -146,7 +146,7 @@
     </div>
 
     <!-- Background (Visual only) -->
-    <div class="absolute inset-0 z-0 bg-neutral-950"></div>
+    <div class="absolute inset-0 z-0 bg-black/40"></div>
 
     <!-- Drag overlay indication -->
     {#if isDragging}

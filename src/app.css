@@ -7,7 +7,7 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background-color: black;
+  background-color: transparent;
   -webkit-app-region: no-drag;
   /* Ensure interaction is possible unless specified otherwise */
 }
