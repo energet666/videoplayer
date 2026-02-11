@@ -5,6 +5,7 @@
 
   let videoSrc = $state<string | null>(null);
   let isDragging = $state(false);
+  let platform = $state("darwin"); // Default to mac logic initially
 
   function loadVideo(url: string) {
     if (videoSrc && videoSrc.startsWith("blob:")) {
@@ -15,6 +16,11 @@
 
   onMount(async () => {
     if (window.electronAPI) {
+      // Get Platform if available
+      if (window.electronAPI.getPlatform) {
+        platform = window.electronAPI.getPlatform();
+      }
+
       const initialFile = await window.electronAPI.getInitialFile();
       if (initialFile) {
         loadVideo(initialFile);
@@ -61,7 +67,10 @@
 </script>
 
 <main
-  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-white select-none"
+  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-white select-none {platform !==
+  'darwin'
+    ? 'rounded-xl border border-white/10'
+    : ''}"
   ondrop={handleDrop}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
@@ -141,7 +150,12 @@
     </div>
 
     <!-- Background (Visual only) -->
-    <div class="absolute inset-0 z-0 bg-black/40"></div>
+    <div
+      class="absolute inset-0 z-0 transition-opacity duration-300 {platform ===
+      'darwin'
+        ? 'bg-black/40'
+        : 'bg-black/95'}"
+    ></div>
 
     <!-- Drag overlay indication -->
     {#if isDragging}

@@ -8,5 +8,6 @@ interface Window {
         resizeWindow: (width: number, height: number) => void;
         hideWindow: () => void;
         showWindow: () => void;
+        getPlatform: () => string;
     };
 }
