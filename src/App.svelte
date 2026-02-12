@@ -67,10 +67,8 @@
 </script>
 
 <main
-  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-zinc-900 dark:text-zinc-100 select-none {platform !==
-  'darwin'
-    ? 'rounded-xl border border-black/10 dark:border-white/10'
-    : ''}"
+  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-zinc-900 dark:text-zinc-100 select-none
+  "
   ondrop={handleDrop}
   ondragover={handleDragOver}
   ondragleave={handleDragLeave}
