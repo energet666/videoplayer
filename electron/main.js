@@ -89,8 +89,9 @@ if (!gotTheLock) {
                 nodeIntegration: false,
                 webSecurity: false,
             },
-            transparent: true,
+            transparent: process.platform !== 'win32', // false on Windows enables native blur effects
             vibrancy: 'fullscreen-ui', // macOS blur effect
+            backgroundMaterial: 'acrylic', // Windows 11 blur effect
             visualEffectState: 'active', // keep vibrancy active when window is not focused
             backgroundColor: '#00000000', // fully transparent background
             minWidth: 320,

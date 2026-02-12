@@ -67,9 +67,9 @@
 </script>
 
 <main
-  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-white select-none {platform !==
+  class="w-screen h-screen bg-transparent overflow-hidden relative flex items-center justify-center text-zinc-900 dark:text-zinc-100 select-none {platform !==
   'darwin'
-    ? 'rounded-xl border border-white/10'
+    ? 'rounded-xl border border-black/10 dark:border-white/10'
     : ''}"
   ondrop={handleDrop}
   ondragover={handleDragOver}
@@ -106,16 +106,18 @@
         <!-- Drop Video Icon -->
         <div class="flex flex-col items-center gap-2">
           <DropVideoIcon {isDragging} />
-          <p class="text-xs text-gray-500 font-medium tracking-wide">
+          <p
+            class="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide"
+          >
             MP4 • WebM
           </p>
         </div>
 
         <!-- Divider -->
-        <div class="w-full border-t border-gray-800"></div>
+        <div class="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
 
         <!-- Keyboard Shortcuts -->
-        <div class="w-full text-sm text-gray-500 space-y-2">
+        <div class="w-full text-sm text-zinc-600 dark:text-zinc-400 space-y-2">
           <div class="grid grid-cols-[90px_1fr] gap-x-5 gap-y-2.5 items-center">
             <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
             <span>Пауза / Воспроизведение</span>
@@ -139,7 +141,7 @@
             <span>Скорость воспроизведения</span>
 
             <div
-              class="flex justify-center items-center h-[28px] text-gray-400 font-mono text-sm"
+              class="flex justify-center items-center h-[28px] text-zinc-400 dark:text-zinc-500 font-mono text-sm"
             >
               2×клик
             </div>
@@ -153,8 +155,8 @@
     <div
       class="absolute inset-0 z-0 transition-opacity duration-300 {platform ===
       'darwin'
-        ? 'bg-black/40'
-        : 'bg-black/95'}"
+        ? 'bg-white/50 dark:bg-black/40'
+        : 'bg-white/60 dark:bg-black/40'}"
     ></div>
 
     <!-- Drag overlay indication -->
@@ -176,13 +178,27 @@
     padding: 0 10px;
     font-size: 14px;
     text-align: center;
-    background: linear-gradient(180deg, #2a2a2e 0%, #1e1e22 100%);
-    border: 1px solid #3a3a40;
+
+    /* Default (Light Mode) */
+    background: linear-gradient(180deg, #f4f4f5 0%, #e4e4e7 100%);
+    border: 1px solid #d4d4d8;
     border-bottom-width: 2px;
+    color: #52525b;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+
     border-radius: 6px;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    color: #d4d4d8;
     font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
     white-space: nowrap;
+  }
+
+  /* Dark Mode override via media query */
+  @media (prefers-color-scheme: dark) {
+    kbd {
+      background: linear-gradient(180deg, #2a2a2e 0%, #1e1e22 100%);
+      border: 1px solid #3a3a40;
+      border-bottom-width: 2px;
+      color: #d4d4d8;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
   }
 </style>

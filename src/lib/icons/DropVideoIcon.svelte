@@ -17,7 +17,7 @@
         rx="4"
         stroke="currentColor"
         stroke-width="2"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <!-- Sprocket holes left -->
     <rect
@@ -27,7 +27,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="14"
@@ -36,7 +36,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="14"
@@ -45,7 +45,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="14"
@@ -54,7 +54,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <!-- Sprocket holes right -->
     <rect
@@ -64,7 +64,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="61"
@@ -73,7 +73,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="61"
@@ -82,7 +82,7 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <rect
         x="61"
@@ -91,13 +91,13 @@
         height="4"
         rx="1"
         fill="currentColor"
-        class="text-gray-600"
+        class="text-zinc-400 dark:text-zinc-600"
     />
     <!-- Play triangle -->
     <path
         d="M35 26 L35 42 L49 34 Z"
         fill="currentColor"
-        class="text-gray-500"
+        class="text-zinc-500 dark:text-zinc-500"
     />
     <!-- Arrow down -->
     <line
@@ -108,7 +108,7 @@
         stroke="currentColor"
         stroke-width="2.5"
         stroke-linecap="round"
-        class="text-gray-500"
+        class="text-zinc-500 dark:text-zinc-400"
         class:text-blue-400={isDragging}
     />
     <polyline
@@ -117,7 +117,7 @@
         stroke-width="2.5"
         stroke-linecap="round"
         stroke-linejoin="round"
-        class="text-gray-500"
+        class="text-zinc-500 dark:text-zinc-400"
         class:text-blue-400={isDragging}
     />
 </svg>
