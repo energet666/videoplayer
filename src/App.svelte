@@ -6,6 +6,7 @@
   let videoSrc = $state<string | null>(null);
   let isDragging = $state(false);
   let platform = $state("darwin"); // Default to mac logic initially
+  let isWin10 = $state(false); // Windows 10 without blur support
 
   function loadVideo(url: string) {
     if (videoSrc && videoSrc.startsWith("blob:")) {
@@ -19,6 +20,13 @@
       // Get Platform if available
       if (window.electronAPI.getPlatform) {
         platform = window.electronAPI.getPlatform();
+      }
+
+      // Detect Windows 10 (no blur support)
+      if (platform === "win32" && window.electronAPI.getOSRelease) {
+        const release = window.electronAPI.getOSRelease();
+        const buildNumber = parseInt(release.split(".")[2], 10) || 0;
+        isWin10 = buildNumber < 22000;
       }
 
       const initialFile = await window.electronAPI.getInitialFile();
@@ -151,10 +159,11 @@
 
     <!-- Background (Visual only) -->
     <div
-      class="absolute inset-0 z-0 transition-opacity duration-300 {platform ===
-      'darwin'
-        ? 'bg-white/50 dark:bg-black/40'
-        : 'bg-white/60 dark:bg-black/40'}"
+      class="absolute inset-0 z-0 transition-opacity duration-300 {isWin10
+        ? 'bg-white/95 dark:bg-zinc-900/95'
+        : platform === 'darwin'
+          ? 'bg-white/50 dark:bg-black/40'
+          : 'bg-white/60 dark:bg-black/40'}"
     ></div>
 
     <!-- Drag overlay indication -->

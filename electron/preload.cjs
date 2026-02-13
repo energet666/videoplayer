@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const os = require('os');
 
 contextBridge.exposeInMainWorld('electronAPI', {
     resizeWindow: (width, height) => ipcRenderer.send('resize-window', { width, height }),
@@ -6,5 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getInitialFile: () => ipcRenderer.invoke('get-initial-file'),
     hideWindow: () => ipcRenderer.send('hide-window'),
     showWindow: () => ipcRenderer.send('show-window'),
-    getPlatform: () => process.platform
+    getPlatform: () => process.platform,
+    getOSRelease: () => os.release()
 });

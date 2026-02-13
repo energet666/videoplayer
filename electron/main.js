@@ -78,7 +78,14 @@ if (!gotTheLock) {
     });
 
     function createWindow() {
-        mainWindow = new BrowserWindow({
+        // Detect Windows 11+ (build >= 22000) vs Windows 10
+        const isWin = process.platform === 'win32';
+        const osRelease = require('os').release(); // e.g. "10.0.22621" (Win11) or "10.0.19045" (Win10)
+        const buildNumber = parseInt(osRelease.split('.')[2], 10) || 0;
+        const isWin11 = isWin && buildNumber >= 22000;
+        const isWin10 = isWin && !isWin11;
+
+        const windowOptions = {
             width: 800,
             height: 600,
             frame: false,
@@ -89,15 +96,33 @@ if (!gotTheLock) {
                 nodeIntegration: false,
                 webSecurity: false,
             },
-            transparent: process.platform !== 'win32', // false on Windows enables native blur effects
-            vibrancy: 'fullscreen-ui', // macOS blur effect
-            backgroundMaterial: 'acrylic', // Windows 11 blur effect
-            visualEffectState: 'active', // keep vibrancy active when window is not focused
-            backgroundColor: '#00000000', // fully transparent background
             minWidth: 320,
             minHeight: 240,
             ...(process.env.NODE_ENV === 'development' ? { icon: path.join(__dirname, '../build/icon.png') } : {})
-        });
+        };
+
+        if (process.platform === 'darwin') {
+            // macOS: full transparency + vibrancy blur
+            windowOptions.transparent = true;
+            windowOptions.vibrancy = 'fullscreen-ui';
+            windowOptions.visualEffectState = 'active';
+            windowOptions.backgroundColor = '#00000000';
+        } else if (isWin11) {
+            // Windows 11: acrylic blur effect (no transparent flag needed)
+            windowOptions.transparent = false;
+            windowOptions.backgroundMaterial = 'acrylic';
+            windowOptions.backgroundColor = '#00000000';
+        } else if (isWin10) {
+            // Windows 10: no blur support, use semi-opaque background
+            windowOptions.transparent = false;
+            windowOptions.backgroundColor = '#1a1a1a'; // dark solid background for Win10
+        } else {
+            // Linux / other: transparent background
+            windowOptions.transparent = true;
+            windowOptions.backgroundColor = '#00000000';
+        }
+
+        mainWindow = new BrowserWindow(windowOptions);
 
         const isDev = process.env.NODE_ENV === 'development';
 

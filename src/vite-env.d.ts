@@ -9,5 +9,6 @@ interface Window {
         hideWindow: () => void;
         showWindow: () => void;
         getPlatform: () => string;
+        getOSRelease: () => string;
     };
 }
