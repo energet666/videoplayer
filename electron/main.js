@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
+import os from 'os';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -80,7 +81,7 @@ if (!gotTheLock) {
     function createWindow() {
         // Detect Windows 11+ (build >= 22000) vs Windows 10
         const isWin = process.platform === 'win32';
-        const osRelease = require('os').release(); // e.g. "10.0.22621" (Win11) or "10.0.19045" (Win10)
+        const osRelease = os.release(); // e.g. "10.0.22621" (Win11) or "10.0.19045" (Win10)
         const buildNumber = parseInt(osRelease.split('.')[2], 10) || 0;
         const isWin11 = isWin && buildNumber >= 22000;
         const isWin10 = isWin && !isWin11;
