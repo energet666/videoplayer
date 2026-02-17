@@ -1,6 +1,17 @@
+// ============================================================================
+// Утилитарные функции
+// ============================================================================
+
+/**
+ * Форматирует время в секундах в строку вида "M:SS".
+ * Например: 65 → "1:05", 0 → "0:00", 125.7 → "2:05"
+ *
+ * @param seconds — время в секундах (может быть дробным)
+ * @returns — отформатированная строка
+ */
 export function formatTime(seconds: number) {
     if (!seconds && seconds !== 0) return "0:00";
-    const m = Math.floor(seconds / 60);
-    const s = Math.floor(seconds % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
+    const m = Math.floor(seconds / 60);              // Минуты
+    const s = Math.floor(seconds % 60);              // Секунды
+    return `${m}:${s.toString().padStart(2, "0")}`;  // Дополняем секунды до 2 цифр
 }

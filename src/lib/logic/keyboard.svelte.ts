@@ -1,19 +1,58 @@
+// ============================================================================
+// keyboard.svelte.ts — Обработчик клавиатурных сочетаний
+// ============================================================================
+// Управляет всей логикой клавиатуры для видеоплеера:
+//
+// ПРОБЕЛ (Space):
+//   - Короткое нажатие → пауза / воспроизведение
+//   - Зажатие (>200мс) → ускорение ×2 (отпускание — возврат к userPlaybackRate)
+//
+// СТРЕЛКИ ВЛЕВО/ВПРАВО (ArrowLeft / ArrowRight):
+//   - Короткое нажатие → перемотка на ±1 секунду
+//   - Зажатие (>200мс):
+//       → Вправо: ускорение ×16 (быстрая перемотка вперёд)
+//       → Влево: прыжки назад на 3 секунды каждые 300мс (имитация перемотки назад)
+//
+// СТРЕЛКИ ВВЕРХ/ВНИЗ (ArrowUp / ArrowDown):
+//   - Изменение скорости воспроизведения (из массива availableSpeeds)
+//
+// Принцип "короткое vs длинное нажатие":
+// При keydown запускается таймер на 200мс. Если клавиша отпущена раньше —
+// выполняется "короткое" действие. Если таймер сработал — "длинное" действие.
+// ============================================================================
+
 import { safePlay, togglePlay } from "./video-actions";
 
+// Доступные скорости воспроизведения (переключаются стрелками ↑↓)
 export const availableSpeeds = [1.0, 1.25, 1.5, 2.0];
 
 export class KeyboardHandler {
-    // Space State
-    private isSpaceDown = false;
-    private spaceTimer: ReturnType<typeof setTimeout> | undefined;
-    private isSpaceLongPress = false;
+    // ========================
+    // Состояние клавиши Space
+    // ========================
+    private isSpaceDown = false;             // Клавиша зажата?
+    private spaceTimer: ReturnType<typeof setTimeout> | undefined; // Таймер для определения длинного нажатия
+    private isSpaceLongPress = false;        // Сработал ли таймер (длинное нажатие)?
 
-    // Arrow State
-    private isArrowDown = false;
-    private arrowTimer: ReturnType<typeof setTimeout> | undefined;
-    private seekInterval: ReturnType<typeof setInterval> | undefined;
-    private isArrowLongPress = false;
+    // ========================
+    // Состояние стрелок ←→
+    // ========================
+    private isArrowDown = false;             // Стрелка зажата?
+    private arrowTimer: ReturnType<typeof setTimeout> | undefined; // Таймер длинного нажатия
+    private seekInterval: ReturnType<typeof setInterval> | undefined; // Интервал для перемотки назад
+    private isArrowLongPress = false;        // Длинное нажатие?
 
+    /**
+     * @param getVideo — функция-getter для получения HTMLVideoElement.
+     *   Используем getter, потому что элемент может быть ещё не создан на момент
+     *   инициализации handler'а.
+     * @param context — набор колбэков для взаимодействия с UI-компонентом:
+     *   - getPlaybackRate: получить скорость, установленную пользователем
+     *   - setPlaybackRate: установить новую скорость
+     *   - getDuration: получить длительность видео
+     *   - onShowControls: показать контролы
+     *   - onShowSpeedIndicator: показать индикатор скорости
+     */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
         private context: {
@@ -25,21 +64,29 @@ export class KeyboardHandler {
         }
     ) { }
 
+    /**
+     * Обработчик нажатия клавиши (keydown).
+     * Для каждой клавиши: запоминаем состояние + запускаем таймер длинного нажатия.
+     */
     handleKeyDown(e: KeyboardEvent) {
         const videoElement = this.getVideo();
 
-        // Space Logic
+        // ========================
+        // ПРОБЕЛ (Space)
+        // ========================
         if (e.code === "Space") {
             e.preventDefault();
+            // Защита от повторных keydown (зажатая клавиша генерирует их непрерывно)
             if (this.isSpaceDown) return;
             this.isSpaceDown = true;
             this.isSpaceLongPress = false;
 
+            // Через 200мс считаем это длинным нажатием → ускоряем до ×2
             this.spaceTimer = setTimeout(() => {
                 if (!videoElement) return;
                 videoElement.playbackRate = 2.0;
                 this.isSpaceLongPress = true;
-                // If long press activates, ensure we are playing
+                // Если видео на паузе — начинаем воспроизведение
                 if (videoElement.paused) {
                     safePlay(videoElement);
                 }
@@ -47,99 +94,117 @@ export class KeyboardHandler {
             return;
         }
 
-        // Arrow Logic: Seek and Speed
+        // ========================
+        // СТРЕЛКИ
+        // ========================
         if (e.code.startsWith("Arrow")) {
             e.preventDefault();
 
-            // Speed Control (Up/Down)
+            // --- Стрелки ↑↓: изменение скорости воспроизведения ---
             if (e.code === "ArrowUp" || e.code === "ArrowDown") {
                 if (!videoElement) return;
                 const currentRate = this.context.getPlaybackRate();
                 const currentIndex = availableSpeeds.indexOf(currentRate);
                 let newIndex = currentIndex;
 
+                // ↑ — увеличиваем скорость (следующий элемент массива)
                 if (e.code === "ArrowUp") {
                     newIndex = Math.min(availableSpeeds.length - 1, currentIndex + 1);
-                } else {
+                }
+                // ↓ — уменьшаем скорость (предыдущий элемент массива)
+                else {
                     newIndex = Math.max(0, currentIndex - 1);
                 }
 
+                // Обновляем скорость, если она изменилась
                 if (newIndex !== currentIndex) {
                     const newRate = availableSpeeds[newIndex];
-                    this.context.setPlaybackRate(newRate);
-                    videoElement.playbackRate = newRate;
-
-                    // Show speed indicator
-                    this.context.onShowSpeedIndicator();
+                    this.context.setPlaybackRate(newRate);     // Обновляем в UI-состоянии
+                    videoElement.playbackRate = newRate;       // Применяем к <video>
+                    this.context.onShowSpeedIndicator();       // Показываем индикатор "1.5x"
                 }
                 return;
             }
 
-            // Seek Logic (Left/Right)
+            // --- Стрелки ←→: перемотка ---
             if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
+                // Защита от повторных keydown
                 if (this.isArrowDown) return;
                 this.isArrowDown = true;
                 this.isArrowLongPress = false;
 
                 const isRight = e.code === "ArrowRight";
 
+                // Через 200мс считаем длинным нажатием → быстрая перемотка
                 this.arrowTimer = setTimeout(() => {
                     this.isArrowLongPress = true;
-                    this.context.onShowControls();
+                    this.context.onShowControls(); // Показываем контролы при перемотке
 
                     if (!videoElement) return;
 
                     if (isRight) {
-                        // 16x Forward
+                        // При зажатии → : ускоряем до ×16 (быстрая перемотка вперёд)
                         videoElement.playbackRate = 16.0;
                         if (videoElement.paused) safePlay(videoElement);
                     } else {
-                        // Rewind: Jump back 3s every 300ms
+                        // При зажатии ← : прыгаем назад на 3 секунды каждые 300мс.
+                        // HTML5 video не поддерживает отрицательную playbackRate,
+                        // поэтому используем setInterval для имитации перемотки назад.
                         const doRewind = () => {
                             videoElement.currentTime = Math.max(
                                 0,
                                 videoElement.currentTime - 3,
                             );
                         };
-                        doRewind(); // Immediate execution
-                        this.seekInterval = setInterval(doRewind, 300);
+                        doRewind();       // Первый прыжок — сразу
+                        this.seekInterval = setInterval(doRewind, 300); // Далее каждые 300мс
                     }
                 }, 200);
             }
         }
     }
 
+    /**
+     * Обработчик отпускания клавиши (keyup).
+     * Определяет, было ли нажатие коротким или длинным, и выполняет
+     * соответствующее действие.
+     */
     handleKeyUp(e: KeyboardEvent) {
         const videoElement = this.getVideo();
 
-        // Space Logic
+        // ========================
+        // ПРОБЕЛ (Space) — отпускание
+        // ========================
         if (e.code === "Space") {
             e.preventDefault();
             this.isSpaceDown = false;
             clearTimeout(this.spaceTimer);
 
             if (this.isSpaceLongPress) {
+                // Было длинное нажатие — возвращаем скорость к пользовательской
                 if (videoElement) {
                     videoElement.playbackRate = this.context.getPlaybackRate();
                 }
             } else {
+                // Было короткое нажатие — переключаем паузу
                 togglePlay(videoElement);
             }
             return;
         }
 
-        // Arrow Logic
+        // ========================
+        // СТРЕЛКИ ←→ — отпускание
+        // ========================
         if (e.code === "ArrowLeft" || e.code === "ArrowRight") {
             e.preventDefault();
-            // Only handle if this was the active arrow action
-            if (!this.isArrowDown) return;
+            if (!this.isArrowDown) return;  // Не наша стрелка (например, ↑↓)
 
             this.isArrowDown = false;
             clearTimeout(this.arrowTimer);
             clearInterval(this.seekInterval);
 
             if (!this.isArrowLongPress) {
-                // Short press action: 1s jump
+                // Короткое нажатие → перемотка на ±1 секунду
                 if (videoElement) {
                     const isRight = e.code === "ArrowRight";
                     const direction = isRight ? 1 : -1;
@@ -151,7 +216,7 @@ export class KeyboardHandler {
                     );
                 }
             } else {
-                // Long press release - Restore normal speed
+                // Длинное нажатие закончилось — возвращаем нормальную скорость
                 if (videoElement) {
                     videoElement.playbackRate = this.context.getPlaybackRate();
                     if (videoElement.paused) safePlay(videoElement);
@@ -161,6 +226,10 @@ export class KeyboardHandler {
         }
     }
 
+    /**
+     * Очистка всех таймеров и интервалов.
+     * Вызывается при уничтожении компонента VideoPlayer.
+     */
     cleanup() {
         clearTimeout(this.spaceTimer);
         clearTimeout(this.arrowTimer);

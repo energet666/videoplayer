@@ -1,3 +1,11 @@
+/* ===========================================================================
+ * Глобальные стили приложения
+ * ===========================================================================
+ * Подключение TailwindCSS + базовые стили для полноэкранного Electron-окна.
+ * -webkit-app-region: no-drag запрещает перетаскивание окна по умолчанию
+ * (разрешается только для конкретных drag-областей в компонентах).
+ * =========================================================================== */
+
 @import "tailwindcss";
 
 html,
@@ -6,8 +14,7 @@ body {
   height: 100%;
   margin: 0;
   padding: 0;
-  overflow: hidden;
-  background-color: transparent;
-  -webkit-app-region: no-drag;
-  /* Ensure interaction is possible unless specified otherwise */
+  overflow: hidden;            /* Запрещаем прокрутку страницы */
+  background-color: transparent; /* Прозрачный фон (для blur-эффектов Electron) */
+  -webkit-app-region: no-drag; /* По умолчанию окно нельзя перетаскивать */
 }

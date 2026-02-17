@@ -1,6 +1,12 @@
+// ============================================================================
+// video-actions.ts — Утилиты для управления видео
+// ============================================================================
+// Набор функций для базовых действий с <video>: play, pause, fullscreen, PiP.
+// ============================================================================
+
 /**
- * Safely plays the video, catching AbortError which is common
- * when playing/pausing rapidly.
+ * Безопасный запуск воспроизведения.
+ * AbortError при быстром play/pause — нормальная ситуация, игнорируем.
  */
 export function safePlay(videoElement: HTMLVideoElement | undefined) {
     videoElement?.play()?.catch((e) => {
@@ -11,7 +17,7 @@ export function safePlay(videoElement: HTMLVideoElement | undefined) {
 }
 
 /**
- * Toggles play/pause state
+ * Переключает воспроизведение/паузу.
  */
 export function togglePlay(videoElement: HTMLVideoElement | undefined) {
     if (!videoElement) return;
@@ -23,7 +29,9 @@ export function togglePlay(videoElement: HTMLVideoElement | undefined) {
 }
 
 /**
- * Toggles fullscreen mode for the video's parent element
+ * Переключает полноэкранный режим.
+ * Fullscreen запрашивается для parentNode (контейнера), а не для <video>,
+ * чтобы кастомные контролы отображались поверх видео.
  */
 export function toggleFullscreen(videoElement: HTMLVideoElement | undefined) {
     if (!videoElement) return;
@@ -42,7 +50,8 @@ export function toggleFullscreen(videoElement: HTMLVideoElement | undefined) {
 }
 
 /**
- * Toggles Picture-in-Picture mode
+ * Переключает PiP (Picture-in-Picture).
+ * При входе в PiP окно Electron скрывается, при выходе — показывается.
  */
 export async function togglePip(videoElement: HTMLVideoElement | undefined) {
     try {
