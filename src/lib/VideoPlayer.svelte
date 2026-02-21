@@ -18,6 +18,7 @@
   import PlayOverlay from "./components/PlayOverlay.svelte";
   import SpeedIndicator from "./components/SpeedIndicator.svelte";
   import VideoControls from "./components/VideoControls.svelte";
+  import WarpEffect from "./components/WarpEffect.svelte";
   import {
     safePlay,
     togglePlay,
@@ -69,6 +70,11 @@
   // ========================
   let isPip = $state(false); // Видео в режиме PiP?
 
+  // ========================
+  // Warp-эффект (ускорение ×2)
+  // ========================
+  let isWarpActive = $state(false); // Показывать ли warp-эффект?
+
   /**
    * Показывает контролы и запускает таймер автоскрытия.
    * Вызывается при движении мыши, нажатии клавиш и скролле тачпада.
@@ -105,6 +111,13 @@
       speedIndicatorTimeout = setTimeout(() => {
         showSpeedIndicator = false;
       }, 500);
+    },
+    // Warp-эффект при ускорении ×2 (зажатый пробел)
+    onWarpStart: () => {
+      isWarpActive = true;
+    },
+    onWarpEnd: () => {
+      isWarpActive = false;
     },
   });
 
@@ -238,6 +251,9 @@
   {#if paused}
     <PlayOverlay {showControls} />
   {/if}
+
+  <!-- Warp-эффект при ускорении ×2 (зажатый пробел) -->
+  <WarpEffect isActive={isWarpActive} />
 
   <!-- Индикатор скорости воспроизведения (верхний правый угол, например "1.5x") -->
   <SpeedIndicator {showSpeedIndicator} {userPlaybackRate} />

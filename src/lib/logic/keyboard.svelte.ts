@@ -52,6 +52,8 @@ export class KeyboardHandler {
      *   - getDuration: получить длительность видео
      *   - onShowControls: показать контролы
      *   - onShowSpeedIndicator: показать индикатор скорости
+     *   - onWarpStart: начать warp-эффект (ускорение ×2)
+     *   - onWarpEnd: закончить warp-эффект
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
@@ -61,6 +63,8 @@ export class KeyboardHandler {
             getDuration: () => number;
             onShowControls: () => void;
             onShowSpeedIndicator: () => void;
+            onWarpStart?: () => void;
+            onWarpEnd?: () => void;
         }
     ) { }
 
@@ -90,6 +94,8 @@ export class KeyboardHandler {
                 if (videoElement.paused) {
                     safePlay(videoElement);
                 }
+                // Запускаем warp-эффект
+                this.context.onWarpStart?.();
             }, 200);
             return;
         }
@@ -185,6 +191,8 @@ export class KeyboardHandler {
                 if (videoElement) {
                     videoElement.playbackRate = this.context.getPlaybackRate();
                 }
+                // Останавливаем warp-эффект
+                this.context.onWarpEnd?.();
             } else {
                 // Было короткое нажатие — переключаем паузу
                 togglePlay(videoElement);
