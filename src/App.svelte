@@ -16,7 +16,33 @@
   import VideoPlayer from "./lib/VideoPlayer.svelte";
   import DropVideoIcon from "./lib/icons/DropVideoIcon.svelte";
 
-  const SUPPORTED_VIDEO_EXTENSIONS = ["mp4", "mkv", "avi", "mov", "webm", "m4v"];
+  // Контейнеры, которые стабильно воспроизводятся HTML5 video в Chromium/Electron.
+  const WEB_PLAYABLE_VIDEO_TYPES = [
+    { ext: "mp4", mime: "video/mp4", label: "MP4" },
+    { ext: "m4v", mime: "video/mp4", label: "M4V" },
+    { ext: "webm", mime: "video/webm", label: "WebM" },
+    { ext: "ogv", mime: "video/ogg", label: "OGV" },
+  ] as const;
+
+  function canBrowserPlayVideoType(mime: string): boolean {
+    const probe = document.createElement("video");
+    return probe.canPlayType(mime) !== "";
+  }
+
+  function isPlayableVideoFile(file: File): boolean {
+    const normalizedType = file.type.trim().toLowerCase();
+    if (normalizedType) {
+      return canBrowserPlayVideoType(normalizedType);
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (!extension) return false;
+
+    const byExtension = WEB_PLAYABLE_VIDEO_TYPES.find((type) => type.ext === extension);
+    if (!byExtension) return false;
+
+    return canBrowserPlayVideoType(byExtension.mime);
+  }
 
   // URL текущего видеофайла (null = видео не загружено, показываем welcome-экран)
   let videoSrc = $state<string | null>(null);
@@ -90,11 +116,8 @@
     const dt = e.dataTransfer;
     if (dt && dt.files && dt.files.length > 0) {
       const file = dt.files[0];
-      // Проверяем, является ли файл видео (по MIME или расширению)
-      if (
-        file.type.startsWith("video/") ||
-        file.name.match(new RegExp(`\\.(${SUPPORTED_VIDEO_EXTENSIONS.join("|")})$`, "i"))
-      ) {
+      // Проверяем, что контейнер реально поддерживается HTML5 video в Chromium.
+      if (isPlayableVideoFile(file)) {
         // Освобождаем память от предыдущего blob URL
         if (videoSrc && videoSrc.startsWith("blob:")) {
           URL.revokeObjectURL(videoSrc);
@@ -179,7 +202,7 @@
           <p
             class="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide"
           >
-            MP4 • MKV • AVI • MOV • WebM • M4V
+            {WEB_PLAYABLE_VIDEO_TYPES.map((type) => type.label).join(" • ")}
           </p>
         </div>
 

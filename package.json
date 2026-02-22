@@ -46,11 +46,9 @@
       {
         "ext": [
           "mp4",
-          "mkv",
-          "avi",
-          "mov",
+          "m4v",
           "webm",
-          "m4v"
+          "ogv"
         ],
         "name": "Video",
         "description": "Video File",

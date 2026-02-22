@@ -15,7 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Список поддерживаемых видеоформатов (используется для определения,
 // является ли аргумент командной строки путём к видеофайлу)
-const VIDEO_EXTENSIONS = ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v'];
+const VIDEO_EXTENSIONS = ['.mp4', '.m4v', '.webm', '.ogv'];
 
 // Ссылка на главное окно (BrowserWindow). Хранится глобально, чтобы
 // иметь доступ из обработчиков событий (second-instance, open-file и т.д.)
