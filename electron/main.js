@@ -218,6 +218,11 @@ if (!gotTheLock) {
                     return;
                 }
 
+                // Фиксируем пропорции окна по соотношению сторон текущего видео.
+                // Это заставляет ручной ресайз (перетаскивание краёв/углов)
+                // сохранять aspect ratio.
+                mainWindow.setAspectRatio(width / height);
+
                 // Определяем экран, на котором находится окно
                 const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
                 const { width: screenWidth, height: screenHeight } = currentScreen.workAreaSize;
