@@ -209,7 +209,6 @@ if (!gotTheLock) {
         // Renderer просит изменить размер окна (при загрузке метаданных видео).
         // Окно масштабируется пропорционально, чтобы вместить видео и не выходить за экран.
         ipcMain.on('resize-window', (event, { width, height }) => {
-            console.log('Main process received resize-window:', width, height);
             if (mainWindow && !mainWindow.isDestroyed()) {
                 // Определяем экран, на котором находится окно
                 const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());

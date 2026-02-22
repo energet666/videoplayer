@@ -138,7 +138,6 @@
     if (videoElement) {
       const width = videoElement.videoWidth;
       const height = videoElement.videoHeight;
-      console.log(`Video metadata loaded. Dimensions: ${width}x${height}`);
 
       // Если запущено в Electron — ресайзим окно под размер видео
       if (window.electronAPI) {

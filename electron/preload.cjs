@@ -32,5 +32,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
     // Возвращает текущую платформу: 'darwin' (macOS), 'win32' (Windows), 'linux'
     // Используется в UI для платформо-зависимых стилей (например, прозрачность фона)
-    getPlatform: () => process.platform
+    getPlatform: () => process.platform,
 });
