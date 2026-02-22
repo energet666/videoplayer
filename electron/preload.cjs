@@ -18,7 +18,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Подписка на событие открытия файла.
     // Срабатывает, когда пользователь открывает файл через "Открыть с помощью..."
     // при уже запущенном приложении (second-instance на Windows, open-file на macOS).
-    onOpenFile: (callback) => ipcRenderer.on('open-file', (_event, value) => callback(value)),
+    onOpenFile: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('open-file', handler);
+        return () => ipcRenderer.removeListener('open-file', handler);
+    },
 
     // Запрашивает начальный файл (если приложение было запущено с аргументом — путём к файлу).
     // Возвращает Promise<string | null>: URL файла или null, если запущено без файла.

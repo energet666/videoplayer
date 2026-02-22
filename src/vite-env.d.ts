@@ -18,7 +18,7 @@ interface Window {
         getInitialFile: () => Promise<string | null>;
 
         /** Подписка на открытие файла из внешних источников (Открыть с помощью...) */
-        onOpenFile: (callback: (path: string) => void) => void;
+        onOpenFile: (callback: (path: string) => void) => () => void;
 
         /** Просит main-процесс изменить размер окна под размер видео */
         resizeWindow: (width: number, height: number) => void;

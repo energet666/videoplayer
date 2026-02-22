@@ -68,6 +68,10 @@ function toFileURL(filePath) {
     return pathToFileURL(filePath).href;
 }
 
+function isPositiveFiniteNumber(value) {
+    return Number.isFinite(value) && value > 0;
+}
+
 // ============================================================================
 // Блокировка единственного экземпляра (Single Instance Lock)
 // ============================================================================
@@ -144,7 +148,7 @@ if (!gotTheLock) {
                 preload: path.join(__dirname, 'preload.cjs'), // Preload-скрипт (мост между main и renderer)
                 contextIsolation: true,   // Изоляция контекста (безопасность)
                 nodeIntegration: false,   // Запрещаем Node.js API в renderer
-                webSecurity: false,       // Отключаем CORS/CSP для загрузки file:// URL
+                webSecurity: process.env.NODE_ENV !== 'development',
             },
             // На Windows transparent: false, чтобы работал acrylic blur.
             // На macOS/Linux — transparent: true для vibrancy.
@@ -210,6 +214,10 @@ if (!gotTheLock) {
         // Окно масштабируется пропорционально, чтобы вместить видео и не выходить за экран.
         ipcMain.on('resize-window', (event, { width, height }) => {
             if (mainWindow && !mainWindow.isDestroyed()) {
+                if (!isPositiveFiniteNumber(width) || !isPositiveFiniteNumber(height)) {
+                    return;
+                }
+
                 // Определяем экран, на котором находится окно
                 const currentScreen = screen.getDisplayMatching(mainWindow.getBounds());
                 const { width: screenWidth, height: screenHeight } = currentScreen.workAreaSize;
@@ -219,8 +227,8 @@ if (!gotTheLock) {
                 const availableWidth = screenWidth - padding;
                 const availableHeight = screenHeight - padding;
 
-                let newWidth = width;
-                let newHeight = height;
+                let newWidth = Math.min(width, 8192);
+                let newHeight = Math.min(height, 8192);
 
                 // Если видео больше экрана — масштабируем пропорционально
                 if (newWidth > availableWidth || newHeight > availableHeight) {

@@ -41,6 +41,7 @@ export class KeyboardHandler {
     private arrowTimer: ReturnType<typeof setTimeout> | undefined; // Таймер длинного нажатия
     private seekInterval: ReturnType<typeof setInterval> | undefined; // Интервал для перемотки назад
     private isArrowLongPress = false;        // Длинное нажатие?
+    private arrowRightTemporarilyPlayed = false; // Длинное удержание → временно запустили playback?
 
     /**
      * @param getVideo — функция-getter для получения HTMLVideoElement.
@@ -138,6 +139,7 @@ export class KeyboardHandler {
                 if (this.isArrowDown) return;
                 this.isArrowDown = true;
                 this.isArrowLongPress = false;
+                this.arrowRightTemporarilyPlayed = false;
 
                 const isRight = e.code === "ArrowRight";
 
@@ -151,7 +153,10 @@ export class KeyboardHandler {
                     if (isRight) {
                         // При зажатии → : ускоряем до ×16 (быстрая перемотка вперёд)
                         videoElement.playbackRate = 16.0;
-                        if (videoElement.paused) safePlay(videoElement);
+                        if (videoElement.paused) {
+                            this.arrowRightTemporarilyPlayed = true;
+                            safePlay(videoElement);
+                        }
                     } else {
                         // При зажатии ← : прыгаем назад на 3 секунды каждые 300мс.
                         // HTML5 video не поддерживает отрицательную playbackRate,
@@ -227,8 +232,11 @@ export class KeyboardHandler {
                 // Длинное нажатие закончилось — возвращаем нормальную скорость
                 if (videoElement) {
                     videoElement.playbackRate = this.context.getPlaybackRate();
-                    if (videoElement.paused) safePlay(videoElement);
+                    if (this.arrowRightTemporarilyPlayed) {
+                        videoElement.pause();
+                    }
                 }
+                this.arrowRightTemporarilyPlayed = false;
                 this.context.onShowControls();
             }
         }
@@ -242,5 +250,6 @@ export class KeyboardHandler {
         clearTimeout(this.spaceTimer);
         clearTimeout(this.arrowTimer);
         clearInterval(this.seekInterval);
+        this.arrowRightTemporarilyPlayed = false;
     }
 }

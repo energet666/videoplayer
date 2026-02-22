@@ -16,6 +16,8 @@
   import VideoPlayer from "./lib/VideoPlayer.svelte";
   import DropVideoIcon from "./lib/icons/DropVideoIcon.svelte";
 
+  const SUPPORTED_VIDEO_EXTENSIONS = ["mp4", "mkv", "avi", "mov", "webm", "m4v"];
+
   // URL текущего видеофайла (null = видео не загружено, показываем welcome-экран)
   let videoSrc = $state<string | null>(null);
 
@@ -45,25 +47,35 @@
    * 3. Проверяем, был ли передан файл при запуске ("Открыть с помощью...")
    * 4. Подписываемся на будущие открытия файлов (через second-instance/open-file)
    */
-  onMount(async () => {
-    if (window.electronAPI) {
-      // Определяем платформу для платформо-зависимых стилей
-      if (window.electronAPI.getPlatform) {
-        platform = window.electronAPI.getPlatform();
-      }
+  onMount(() => {
+    if (!window.electronAPI) return;
 
-      // Проверяем, был ли передан файл при запуске приложения
-      const initialFile = await window.electronAPI.getInitialFile();
-      if (initialFile) {
+    let isUnmounted = false;
+
+    // Определяем платформу для платформо-зависимых стилей
+    if (window.electronAPI.getPlatform) {
+      platform = window.electronAPI.getPlatform();
+    }
+
+    // Проверяем, был ли передан файл при запуске приложения
+    window.electronAPI.getInitialFile().then((initialFile) => {
+      if (initialFile && !isUnmounted) {
         loadVideo(initialFile);
       }
+    });
 
-      // Слушаем событие открытия файла (когда приложение уже запущено,
-      // а пользователь повторно использует "Открыть с помощью...")
-      window.electronAPI.onOpenFile((fileURL) => {
+    // Слушаем событие открытия файла (когда приложение уже запущено,
+    // а пользователь повторно использует "Открыть с помощью...")
+    const unsubscribe = window.electronAPI.onOpenFile((fileURL) => {
+      if (!isUnmounted) {
         loadVideo(fileURL);
-      });
-    }
+      }
+    });
+
+    return () => {
+      isUnmounted = true;
+      unsubscribe();
+    };
   });
 
   /**
@@ -79,7 +91,10 @@
     if (dt && dt.files && dt.files.length > 0) {
       const file = dt.files[0];
       // Проверяем, является ли файл видео (по MIME или расширению)
-      if (file.type.startsWith("video/") || file.name.match(/\.(mp4|webm)$/i)) {
+      if (
+        file.type.startsWith("video/") ||
+        file.name.match(new RegExp(`\\.(${SUPPORTED_VIDEO_EXTENSIONS.join("|")})$`, "i"))
+      ) {
         // Освобождаем память от предыдущего blob URL
         if (videoSrc && videoSrc.startsWith("blob:")) {
           URL.revokeObjectURL(videoSrc);
@@ -164,7 +179,7 @@
           <p
             class="text-xs text-zinc-500 dark:text-zinc-400 font-medium tracking-wide"
           >
-            MP4 • WebM
+            MP4 • MKV • AVI • MOV • WebM • M4V
           </p>
         </div>
 
