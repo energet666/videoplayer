@@ -20,9 +20,7 @@
   import VideoControls from "./components/VideoControls.svelte";
   import WarpEffect from "./components/WarpEffect.svelte";
   import {
-    safePlay,
     togglePlay,
-    toggleFullscreen,
     togglePip,
   } from "./logic/video-actions";
   import { KeyboardHandler } from "./logic/keyboard.svelte";
@@ -74,6 +72,13 @@
   // Warp-эффект (ускорение ×2)
   // ========================
   let isWarpActive = $state(false); // Показывать ли warp-эффект?
+  let clickTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер различения single/double click
+  let seekFeedbackSide = $state<"left" | "right" | null>(null); // Сторона последней перемотки
+  let seekFeedbackAmount = $state(10); // Накопленный шаг для отображения (10, 20, 30...)
+  let seekFeedbackTick = $state(0); // Ключ для перезапуска анимации
+  let seekFeedbackTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер скрытия индикатора
+  let lastSeekFeedbackAt = 0; // Время последнего шага перемотки для накопления
+  const SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS = 600;
 
   /**
    * Показывает контролы и запускает таймер автоскрытия.
@@ -155,6 +160,63 @@
     showControls = true;
   }
 
+  /**
+   * Перемотка по двойному клику:
+   * левая половина — назад на 10 секунд, правая — вперед на 10 секунд.
+   */
+  function handleSeekBySide(event: MouseEvent) {
+    if (!videoElement || !videoContainer) return;
+
+    const now = Date.now();
+    const rect = videoContainer.getBoundingClientRect();
+    const isLeftHalf = event.clientX < rect.left + rect.width / 2;
+    const side: "left" | "right" = isLeftHalf ? "left" : "right";
+    const seekDelta = isLeftHalf ? -10 : 10;
+    const nextTime = Math.min(
+      duration || videoElement.duration || 0,
+      Math.max(0, videoElement.currentTime + seekDelta),
+    );
+
+    videoElement.currentTime = nextTime;
+    const shouldAccumulate =
+      seekFeedbackSide === side &&
+      now - lastSeekFeedbackAt <= SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS;
+
+    seekFeedbackAmount = shouldAccumulate ? seekFeedbackAmount + 10 : 10;
+    seekFeedbackSide = side;
+    lastSeekFeedbackAt = now;
+    seekFeedbackTick += 1;
+    clearTimeout(seekFeedbackTimeout);
+    seekFeedbackTimeout = setTimeout(() => {
+      seekFeedbackSide = null;
+      seekFeedbackAmount = 10;
+    }, 420);
+    handleMouseMove();
+  }
+
+  /**
+   * YouTube-подобная схема кликов:
+   * - single click => play/pause (с задержкой, чтобы не конфликтовал с double click)
+   * - 2/4/6... click в серии => перемотка ±10 секунд
+   */
+  function handleVideoClick(event: MouseEvent) {
+    if (!videoElement) return;
+
+    const clickCountInSeries = event.detail;
+    clearTimeout(clickTimeout);
+
+    if (clickCountInSeries === 1) {
+      clickTimeout = setTimeout(() => {
+        togglePlay(videoElement);
+      }, 220);
+      return;
+    }
+
+    if (clickCountInSeries % 2 === 0) {
+      handleSeekBySide(event);
+    }
+  }
+
   // ========================
   // Отслеживание PiP-режима
   // ========================
@@ -202,6 +264,8 @@
   onDestroy(() => {
     clearTimeout(controlsTimeout);
     clearTimeout(speedIndicatorTimeout);
+    clearTimeout(clickTimeout);
+    clearTimeout(seekFeedbackTimeout);
     keyboardHandler.cleanup();
   });
 </script>
@@ -215,7 +279,7 @@
 <!--
   Контейнер видеоплеера.
   - cursor-none: скрывает курсор, когда контролы не видны (для кинематографичности)
-  - ondblclick: двойной клик — переключение полноэкранного режима
+  - onclick на видео: single click => play/pause, double click => seek ±10s
   - onmousemove: показывает контролы при движении мыши
   - onmouseleave: прячет контролы при уходе мыши
 -->
@@ -224,7 +288,6 @@
   class="relative w-full h-full bg-black group overflow-hidden"
   class:cursor-none={!showControls}
   role="application"
-  ondblclick={() => toggleFullscreen(videoElement)}
   onmousemove={handleMouseMove}
   onmouseleave={() => {
     showControls = false;
@@ -242,9 +305,27 @@
     bind:volume
     onloadedmetadata={handleLoadedMetadata}
     onended={onEnd}
-    onclick={() => togglePlay(videoElement)}
+    onclick={handleVideoClick}
     autoplay
   ></video>
+
+  {#if seekFeedbackSide}
+    {#key `${seekFeedbackSide}-${seekFeedbackTick}`}
+      <div
+        class="absolute inset-y-0 w-1/2 flex items-center pointer-events-none z-20"
+        class:justify-start={seekFeedbackSide === "left"}
+        class:justify-end={seekFeedbackSide === "right"}
+        class:left-0={seekFeedbackSide === "left"}
+        class:right-0={seekFeedbackSide === "right"}
+      >
+        <div class="seek-feedback-badge">
+          {seekFeedbackSide === "left"
+            ? `-${seekFeedbackAmount}s`
+            : `+${seekFeedbackAmount}s`}
+        </div>
+      </div>
+    {/key}
+  {/if}
 
   <!-- Большая кнопка Play по центру экрана (показывается только на паузе) -->
   {#if paused}
@@ -276,3 +357,33 @@
     }}
   />
 </div>
+
+<style>
+  .seek-feedback-badge {
+    margin: 0 2.25rem;
+    padding: 0.7rem 1rem;
+    border-radius: 9999px;
+    color: rgba(255, 255, 255, 0.92);
+    background: rgba(15, 15, 15, 0.42);
+    backdrop-filter: blur(8px);
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    animation: seek-feedback-pop 420ms ease-out both;
+  }
+
+  @keyframes seek-feedback-pop {
+    0% {
+      opacity: 0;
+      transform: scale(0.9);
+    }
+    20% {
+      opacity: 1;
+      transform: scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: scale(1.02);
+    }
+  }
+</style>
