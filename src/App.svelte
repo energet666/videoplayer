@@ -238,13 +238,13 @@
             </div>
             <span>Скорость воспроизведения</span>
 
-            <!-- Двойной клик: полноэкранный режим -->
+            <!-- Двойной клик: перемотка ±10 секунд -->
             <div
               class="flex justify-center items-center h-[28px] text-zinc-400 dark:text-zinc-500 font-mono text-sm"
             >
               2×клик
             </div>
-            <span>Полноэкранный режим</span>
+            <span>Перемотка ±10 сек</span>
           </div>
         </div>
       </div>
