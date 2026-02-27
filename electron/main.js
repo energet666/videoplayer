@@ -142,6 +142,7 @@ if (!gotTheLock) {
         mainWindow = new BrowserWindow({
             width: 800,          // Начальная ширина окна (пикселей)
             height: 600,         // Начальная высота окна (пикселей)
+            show: false,         // Скрываем окно до применения ресайза
             frame: false,        // Убираем стандартную рамку ОС
             titleBarStyle: 'hidden', // Скрываем заголовок (macOS: кнопки светофора остаются)
             webPreferences: {
@@ -173,6 +174,19 @@ if (!gotTheLock) {
             // В production загружаем собранный HTML из папки dist
             mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
         }
+
+        mainWindow.once('ready-to-show', () => {
+            if (!fileToOpen) {
+                mainWindow.show();
+            } else {
+                // Фоллбэк: если метаданные видео не загрузятся за 1 секунду
+                setTimeout(() => {
+                    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.isVisible()) {
+                        mainWindow.show();
+                    }
+                }, 1000);
+            }
+        });
     }
 
     // ========================================================================
@@ -248,6 +262,11 @@ if (!gotTheLock) {
                 // Устанавливаем размер контента (без учёта рамки) и центрируем
                 mainWindow.setContentSize(Math.floor(newWidth), Math.floor(newHeight));
                 mainWindow.center();
+
+                // Если окно было скрыто (при запуске), показываем его после ресайза
+                if (!mainWindow.isVisible()) {
+                    mainWindow.show();
+                }
             }
         });
 
