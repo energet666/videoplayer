@@ -35,6 +35,7 @@
   "build": {
     "appId": "com.x-stas-player.app",
     "productName": "X-Stas-Player",
+    "beforeBuild": "build/beforeBuild.cjs",
     "directories": {
       "output": "release"
     },
@@ -44,12 +45,25 @@
     ],
     "fileAssociations": [
       {
-        "ext": [
-          "mp4",
-          "m4v",
-          "webm",
-          "ogv"
-        ],
+        "ext": "mp4",
+        "name": "Video",
+        "description": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "m4v",
+        "name": "Video",
+        "description": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "webm",
+        "name": "Video",
+        "description": "Video File",
+        "role": "Viewer"
+      },
+      {
+        "ext": "ogv",
         "name": "Video",
         "description": "Video File",
         "role": "Viewer"
