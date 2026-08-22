@@ -26,7 +26,7 @@ There is no test framework and no linter. `npm run check` is the verification st
 Two processes, bridged only by a narrow IPC surface:
 
 - **Main** (`electron/main.js`, ESM, Node) — window lifecycle, command-line/file-association handling, IPC handlers.
-- **Preload** (`electron/preload.cjs`, CJS — must stay CJS) — `contextBridge` exposes exactly six methods as `window.electronAPI`. Adding an IPC channel means touching three files: `main.js` (handler), `preload.cjs` (bridge method), and `src/vite-env.d.ts` (the `Window.electronAPI` type declaration).
+- **Preload** (`electron/preload.cjs`, CJS — must stay CJS) — `contextBridge` exposes one flat `window.electronAPI` object: file intake (`getInitialFile`, `onOpenFile`), window sizing and visibility (`resizeWindow`, `hideWindow`, `showWindow`), window controls (`closeWindow`, `toggleFullscreen`, `isFullscreen`, `onFullscreenChange`), and `getPlatform`. Adding an IPC channel means touching three files: `main.js` (handler), `preload.cjs` (bridge method), and `src/vite-env.d.ts` (the `Window.electronAPI` type declaration).
 - **Renderer** (`src/`) — Svelte 5 app. `window.electronAPI` is typed optional (`?`) on purpose: the UI must degrade gracefully when run in a plain browser, so always guard with `if (window.electronAPI)` / `?.`.
 
 ### Renderer layout
@@ -47,7 +47,17 @@ Input logic lives in `src/lib/logic/` as **plain classes constructed with a `() 
 
 ### Platform-conditional window settings (`electron/main.js`)
 
-`transparent` is `true` everywhere *except* win32, where it would break `backgroundMaterial: 'acrylic'`. `App.svelte` mirrors this with a heavier welcome-screen background on non-darwin platforms. `webSecurity` is disabled in production so `<video>` can load `file://` sources.
+`transparent` is `true` everywhere *except* win32, where it would break `backgroundMaterial: 'acrylic'`. `App.svelte` mirrors this with a heavier welcome-screen background on non-darwin platforms.
+
+`webSecurity: process.env.NODE_ENV !== 'development'` — disabled in **development** only, enabled in production. Note the docblock above `createWindow` and the decision table in `implementation_plan.md` both still describe an unconditional `webSecurity: false`; the conditional in the code is what actually runs.
+
+### Window controls (no native chrome)
+
+`frame: false` with **no `titleBarStyle`** — the app draws its own window buttons. Do not add `titleBarStyle: 'hidden'` back: it is macOS-only and deliberately keeps the traffic lights, which then sit on top of the video, while Windows gets no controls at all. That platform split is exactly what the custom buttons replaced.
+
+Fullscreen is the window's native fullscreen (`setFullScreen`), not the HTML5 Fullscreen API, so macOS hides the menu bar the way the green traffic light did. The renderer does not own the state: `main.js` forwards `enter-full-screen` / `leave-full-screen` over the `fullscreen-changed` channel and `VideoPlayer.svelte` subscribes to it, which keeps the icon correct when fullscreen is toggled outside the button (Ctrl+Cmd+F, F11).
+
+The close button exists twice on purpose — in `VideoControls.svelte` and again in `App.svelte` for the welcome screen. Before a video loads there is no control panel, so without the second one the window could only be closed with Cmd+Q / Alt+F4. Any button overlapping a drag region needs `-webkit-app-region: no-drag`.
 
 ### File associations
 
