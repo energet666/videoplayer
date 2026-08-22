@@ -1,7 +1,8 @@
 // ============================================================================
 // video-actions.ts — Утилиты для управления видео
 // ============================================================================
-// Набор функций для базовых действий с <video>: play, pause, fullscreen, PiP.
+// Набор функций для базовых действий с <video>: play, pause, PiP.
+// Полноэкранный режим обрабатывается нативно в main-процессе Electron.
 // ============================================================================
 
 /**
@@ -25,27 +26,6 @@ export function togglePlay(videoElement: HTMLVideoElement | undefined) {
         safePlay(videoElement);
     } else {
         videoElement.pause();
-    }
-}
-
-/**
- * Переключает полноэкранный режим.
- * Fullscreen запрашивается для parentNode (контейнера), а не для <video>,
- * чтобы кастомные контролы отображались поверх видео.
- */
-export function toggleFullscreen(videoElement: HTMLVideoElement | undefined) {
-    if (!videoElement) return;
-
-    if (!document.fullscreenElement) {
-        (videoElement.parentNode as HTMLElement)
-            .requestFullscreen()
-            .catch((err) => {
-                console.error(
-                    `Error attempting to enable fullscreen: ${err.message}`,
-                );
-            });
-    } else {
-        document.exitFullscreen();
     }
 }
 
