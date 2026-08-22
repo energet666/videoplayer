@@ -26,7 +26,7 @@
     togglePlay,
     togglePip,
   } from "./logic/video-actions";
-  import { KeyboardHandler } from "./logic/keyboard.svelte";
+  import { KeyboardHandler, availableSpeeds } from "./logic/keyboard.svelte";
   import { TouchpadHandler } from "./logic/touchpad.svelte";
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
   import { HoldActionRunner } from "./logic/hold-actions";
@@ -206,16 +206,32 @@
       },
       getDuration: () => duration,
       onShowControls: handleMouseMove,
-      // При изменении скорости показываем индикатор "1.5x" на 500мс
-      onShowSpeedIndicator: () => {
-        showSpeedIndicator = true;
-        clearTimeout(speedIndicatorTimeout);
-        speedIndicatorTimeout = setTimeout(() => {
-          showSpeedIndicator = false;
-        }, 500);
-      },
+      onShowSpeedIndicator: flashSpeedIndicator,
     },
   );
+
+  /** Показываем индикатор "1.5x" на 500мс (клавиши ↑↓ и меню скорости в панели). */
+  function flashSpeedIndicator() {
+    showSpeedIndicator = true;
+    clearTimeout(speedIndicatorTimeout);
+    speedIndicatorTimeout = setTimeout(() => {
+      showSpeedIndicator = false;
+    }, 500);
+  }
+
+  /**
+   * Смена скорости из панели управления (то же, что стрелки ↑↓).
+   * Если сейчас идёт длинное действие (×2 на пробеле, ×16 на →), скорость
+   * элемента не трогаем: её перебивает HoldActionRunner и он же вернёт
+   * userPlaybackRate при отпускании.
+   */
+  function handleRateChange(rate: number) {
+    userPlaybackRate = rate;
+    if (videoElement && !holdActions.isActive()) {
+      videoElement.playbackRate = rate;
+    }
+    flashSpeedIndicator();
+  }
 
   // ========================
   // Инициализация обработчика тачпада
@@ -708,6 +724,9 @@
     {displayTime}
     onSeek={(time) => seekQueue.request(time)}
     {duration}
+    playbackRate={userPlaybackRate}
+    speeds={availableSpeeds}
+    onRateChange={handleRateChange}
     bind:volume
     bind:isDragging
     {paused}
