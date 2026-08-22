@@ -13,15 +13,29 @@
 //   инерционный свайп сыплет wheel-событиями быстрее, чем элемент успевает
 //   отработать seek, и без очереди каждая перемотка отменяла предыдущую —
 //   превью не успевало обновляться
+// - У свайпа нет явного конца (кнопку никто не отпускает), поэтому жест
+//   считается законченным, если wheel-события не приходили TOUCHPAD_GESTURE_GAP_MS.
+//   Это же разделение задаёт точку отсчёта для индикатора перемотки: смещение
+//   показывается от начала текущего свайпа, а не от начала файла
 // ============================================================================
 
 import { debugLog } from "./debug-log";
 import type { SeekQueue } from "./seek-queue.svelte";
 
+// Пауза в wheel-событиях, после которой свайп считается законченным.
+// То же значение гасит индикатор перемотки в VideoPlayer.svelte.
+export const TOUCHPAD_GESTURE_GAP_MS = 300;
+
 export class TouchpadHandler {
     // Коэффициент чувствительности: сколько секунд перемотки на 1 пиксель deltaX.
     // При sensitivity = 0.05: свайп на 100px = перемотка на 5 секунд.
     private sensitivity = 0.05;
+
+    // ========================
+    // Состояние текущего свайпа (нужно индикатору перемотки)
+    // ========================
+    private gestureStartTime = 0; // Позиция видео в начале свайпа
+    private lastWheelAt = 0;      // Момент последнего wheel-события
 
     /**
      * @param getVideo — getter для HTMLVideoElement (может быть undefined)
@@ -29,7 +43,8 @@ export class TouchpadHandler {
      * @param context.getDuration — длительность видео из состояния плеера
      * @param context.onShowControls — колбэк для показа контролов при скролле
      * @param context.onSeekUpdate — колбэк «жест идёт»: плеер ведёт метку на
-     *   прогресс-баре за целью перемотки, а не за отстающим currentTime
+     *   прогресс-баре за целью перемотки, а не за отстающим currentTime, и
+     *   показывает индикатор со смещением от начала свайпа и целевым временем
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
@@ -37,7 +52,7 @@ export class TouchpadHandler {
         private context: {
             getDuration: () => number;
             onShowControls: () => void;
-            onSeekUpdate: () => void;
+            onSeekUpdate: (deltaSeconds: number, targetTime: number) => void;
         }
     ) { }
 
@@ -59,6 +74,14 @@ export class TouchpadHandler {
         // Вычисляем величину перемотки (инвертируем направление)
         const seekAmount = -1 * e.deltaX * this.sensitivity;
 
+        // Новый свайп (пауза между событиями больше порога) — запоминаем точку
+        // отсчёта для индикатора: смещение считается от начала жеста
+        const now = performance.now();
+        if (now - this.lastWheelAt > TOUCHPAD_GESTURE_GAP_MS) {
+            this.gestureStartTime = this.seekQueue.getTargetTime();
+        }
+        this.lastWheelAt = now;
+
         // Шаг относительный, поэтому прибавляем к цели очереди, а не к
         // currentTime: тот ещё не догнал очередь, и накопление шагов терялось бы
         const duration = this.context.getDuration() || videoElement.duration || 0;
@@ -77,6 +100,6 @@ export class TouchpadHandler {
 
         // Показываем контролы при скролле (чтобы прогресс-бар был виден)
         this.context.onShowControls();
-        this.context.onSeekUpdate();
+        this.context.onSeekUpdate(targetTime - this.gestureStartTime, targetTime);
     }
 }

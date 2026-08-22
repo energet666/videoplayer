@@ -27,9 +27,12 @@
     togglePip,
   } from "./logic/video-actions";
   import { KeyboardHandler, availableSpeeds } from "./logic/keyboard.svelte";
-  import { TouchpadHandler } from "./logic/touchpad.svelte";
+  import {
+    TouchpadHandler,
+    TOUCHPAD_GESTURE_GAP_MS,
+  } from "./logic/touchpad.svelte";
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
-  import { HoldActionRunner } from "./logic/hold-actions";
+  import { HoldActionRunner, type HoldAction } from "./logic/hold-actions";
   import { HoldZoneHandler, type HoldZone } from "./logic/hold-zones.svelte";
   import { SeekQueue } from "./logic/seek-queue.svelte";
   import { PlaybackRecovery } from "./logic/recovery";
@@ -94,12 +97,16 @@
   // ========================
   let isWarpActive = $state(false); // Показывать ли warp-эффект?
   let clickTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер различения single/double click
-  let seekFeedbackSide = $state<"left" | "right" | null>(null); // Сторона последней перемотки
-  let seekFeedbackAmount = $state(10); // Накопленный шаг для отображения (10, 20, 30...)
-  let seekFeedbackTick = $state(0); // Ключ для перезапуска анимации
+  // Перемотка двойным кликом показывается тем же индикатором, что и жесты.
+  // Сторона и накопленный шаг обычными переменными: на экран они попадают
+  // через seekIndicator*, отдельная реактивность им не нужна.
+  let isClickSeeking = $state(false); // Показывать индикатор после клика-перемотки?
+  let seekFeedbackSide: "left" | "right" | null = null; // Сторона последней перемотки
+  let seekFeedbackAmount = 10; // Накопленный шаг для отображения (10, 20, 30...)
   let seekFeedbackTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер скрытия индикатора
   let lastSeekFeedbackAt = 0; // Время последнего шага перемотки для накопления
   const SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS = 600;
+  const SEEK_FEEDBACK_VISIBLE_MS = 700; // Сколько индикатор висит после клика
 
   // ========================
   // Перемотка перетаскиванием мыши
@@ -107,8 +114,17 @@
   let isDragSeeking = $state(false); // Идёт ли перемотка перетаскиванием?
   let isTouchpadSeeking = $state(false); // Идёт ли перемотка свайпом по тачпаду?
   let touchpadSeekTimeout: ReturnType<typeof setTimeout>; // Таймер затухания свайпа
-  let dragSeekDelta = $state(0); // Смещение от точки начала жеста (секунды)
-  let dragSeekTarget = $state(0); // Время, к которому перематываем
+  // Индикатор перемотки общий для всех жестов — каждый пишет сюда свои цифры.
+  // Значения намеренно не сбрасываются на конце жеста: индикатор гаснет
+  // плавно (150мс), и за это время подстановка чужих или нулевых цифр была бы
+  // видна как мигание другого значения.
+  let seekIndicatorDelta = $state(0); // Смещение от точки начала жеста (секунды)
+  let seekIndicatorTarget = $state(0); // Время, к которому перематываем
+
+  // Удержание, которое считается перемоткой: ← / → и крайние зоны кадра.
+  // boost (×2 на пробеле и в центре) сюда не попадает — это не перемотка.
+  let holdSeekAction = $state<HoldAction | null>(null);
+  let holdSeekStart = $state(0); // Позиция видео в момент начала удержания
 
   // ========================
   // Удержание левой кнопки по зонам кадра
@@ -161,6 +177,7 @@
       holdActions.stop();
       isWarpActive = false;
       holdZone = null;
+      holdSeekAction = null;
       isDragSeeking = false;
       isTouchpadSeeking = false;
       isRecovering = true;
@@ -186,6 +203,31 @@
     },
     onWarpEnd: () => {
       isWarpActive = false;
+    },
+    // Удержание ←/→ (и крайних зон кадра) — тоже перемотка, показываем тот же
+    // индикатор, что у драга и свайпа. Смещение считаем от позиции на старте
+    // удержания: displayTime уже ведётся за целью очереди каждый кадр.
+    onActionStart: (action) => {
+      if (action === "boost") return;
+      holdSeekStart = seekQueue.getTargetTime();
+      holdSeekAction = action;
+      // Первые цифры выставляем сразу: эффект ниже отработает только после
+      // отрисовки, и на кадре появления индикатор показал бы значения от
+      // прошлого жеста
+      seekIndicatorDelta = 0;
+      seekIndicatorTarget = holdSeekStart;
+      // Держим контролы на экране: при удержании клавиши мышь не двигается,
+      // и панель (а под ней и прогресс-бар) спряталась бы посреди перемотки.
+      // Зоны кадра делают то же самое в onHoldStart.
+      isDragging = true;
+      showControls = true;
+      clearTimeout(controlsTimeout);
+    },
+    onActionEnd: (action) => {
+      holdSeekAction = null;
+      if (action === "boost") return;
+      isDragging = false;
+      handleMouseMove(); // Запускаем автоскрытие контролов заново
     },
   });
 
@@ -242,12 +284,14 @@
     onShowControls: handleMouseMove,
     // У свайпа нет явного конца — считаем жест законченным, если события
     // wheel перестали приходить (инерция затухает сама)
-    onSeekUpdate: () => {
+    onSeekUpdate: (deltaSeconds: number, targetTime: number) => {
       isTouchpadSeeking = true;
+      seekIndicatorDelta = deltaSeconds;
+      seekIndicatorTarget = targetTime;
       clearTimeout(touchpadSeekTimeout);
       touchpadSeekTimeout = setTimeout(() => {
         isTouchpadSeeking = false;
-      }, 300);
+      }, TOUCHPAD_GESTURE_GAP_MS);
     },
   });
 
@@ -267,10 +311,15 @@
       clearTimeout(controlsTimeout);
     },
     onSeekUpdate: (deltaSeconds: number, targetTime: number) => {
-      dragSeekDelta = deltaSeconds;
-      dragSeekTarget = targetTime;
+      seekIndicatorDelta = deltaSeconds;
+      seekIndicatorTarget = targetTime;
     },
     onSeekEnd: () => {
+      // Забираем актуальное состояние прямо у элемента: play() снимает паузу
+      // синхронно, а связанное `paused` обновится только по событию 'play'.
+      // Без этого между концом жеста и событием успевала мигнуть большая
+      // кнопка Play в центре кадра.
+      if (videoElement) paused = videoElement.paused;
       isDragSeeking = false;
       isDragging = false;
       handleMouseMove(); // Запускаем автоскрытие контролов заново
@@ -363,12 +412,20 @@
     seekFeedbackAmount = shouldAccumulate ? seekFeedbackAmount + 10 : 10;
     seekFeedbackSide = side;
     lastSeekFeedbackAt = now;
-    seekFeedbackTick += 1;
+
+    // В индикаторе показываем накопленный шаг серии (−10, −20, −30…) и время,
+    // к которому ведём. Цифры пишем сразу, до показа: значения от прошлого
+    // жеста иначе мелькнули бы на кадре появления.
+    seekIndicatorDelta = isLeftHalf ? -seekFeedbackAmount : seekFeedbackAmount;
+    seekIndicatorTarget = nextTime;
+    isClickSeeking = true;
+
     clearTimeout(seekFeedbackTimeout);
     seekFeedbackTimeout = setTimeout(() => {
+      isClickSeeking = false;
       seekFeedbackSide = null;
       seekFeedbackAmount = 10;
-    }, 420);
+    }, SEEK_FEEDBACK_VISIBLE_MS);
     handleMouseMove();
   }
 
@@ -445,6 +502,25 @@
     return api.onFullscreenChange((value) => {
       isFullscreen = value;
     });
+  });
+
+  // ========================
+  // Индикатор перемотки: один на все жесты
+  // ========================
+  // Драг и свайп сообщают смещение сами, у удержания его считаем от стартовой
+  // позиции по displayTime (он идёт за целью очереди — и на прыжках назад,
+  // и на ×16, где время двигает само воспроизведение).
+  let seekIndicatorActive = $derived(
+    isDragSeeking || isTouchpadSeeking || isClickSeeking || holdSeekAction !== null,
+  );
+
+  // У удержания своего «шага» нет — цифры ведём по displayTime, пока действие
+  // живо. Как только оно закончилось, эффект перестаёт писать, и на экране
+  // замирает последнее значение до конца затухания.
+  $effect(() => {
+    if (holdSeekAction === null) return;
+    seekIndicatorDelta = displayTime - holdSeekStart;
+    seekIndicatorTarget = displayTime;
   });
 
   // ========================
@@ -674,28 +750,10 @@
     autoplay
   ></video>
 
-  {#if seekFeedbackSide}
-    {#key `${seekFeedbackSide}-${seekFeedbackTick}`}
-      <div
-        class="absolute inset-y-0 w-1/2 flex items-center pointer-events-none z-20"
-        class:justify-start={seekFeedbackSide === "left"}
-        class:justify-end={seekFeedbackSide === "right"}
-        class:left-0={seekFeedbackSide === "left"}
-        class:right-0={seekFeedbackSide === "right"}
-      >
-        <div class="seek-feedback-badge">
-          {seekFeedbackSide === "left"
-            ? `-${seekFeedbackAmount}s`
-            : `+${seekFeedbackAmount}s`}
-        </div>
-      </div>
-    {/key}
-  {/if}
-
   <!-- Большая кнопка Play по центру экрана (показывается только на паузе).
-       Во время перемотки перетаскиванием прячем: пауза там техническая,
+       Во время перемотки (мышью или свайпом) прячем: пауза там техническая,
        и кнопка перекрывала бы индикатор перемотки. -->
-  {#if paused && !isDragSeeking}
+  {#if paused && !isDragSeeking && !isTouchpadSeeking}
     <PlayOverlay {showControls} />
   {/if}
 
@@ -714,11 +772,12 @@
     </div>
   {/if}
 
-  <!-- Индикатор перемотки перетаскиванием мыши -->
+  <!-- Индикатор перемотки: драг мышью, свайп по тачпаду, удержание ←/→ и
+       перемотка двойным кликом -->
   <DragSeekIndicator
-    isActive={isDragSeeking}
-    deltaSeconds={dragSeekDelta}
-    targetTime={dragSeekTarget}
+    isActive={seekIndicatorActive}
+    deltaSeconds={seekIndicatorDelta}
+    targetTime={seekIndicatorTarget}
   />
 
   <!-- Warp-эффект при ускорении ×16 (зажатая стрелка вправо) -->
@@ -753,33 +812,3 @@
     }}
   />
 </div>
-
-<style>
-  .seek-feedback-badge {
-    margin: 0 2.25rem;
-    padding: 0.7rem 1rem;
-    border-radius: 9999px;
-    color: rgba(255, 255, 255, 0.92);
-    background: rgba(15, 15, 15, 0.42);
-    backdrop-filter: blur(8px);
-    font-size: 1rem;
-    font-weight: 600;
-    letter-spacing: 0.01em;
-    animation: seek-feedback-pop 420ms ease-out both;
-  }
-
-  @keyframes seek-feedback-pop {
-    0% {
-      opacity: 0;
-      transform: scale(0.9);
-    }
-    20% {
-      opacity: 1;
-      transform: scale(1);
-    }
-    100% {
-      opacity: 0;
-      transform: scale(1.02);
-    }
-  }
-</style>

@@ -48,6 +48,8 @@ export class HoldActionRunner {
      * @param seekQueue — общая очередь перемоток (одна на элемент)
      * @param context.getPlaybackRate — скорость, выбранная пользователем
      * @param context.onWarpStart / onWarpEnd — warp-эффект для forward (×16)
+     * @param context.onActionStart / onActionEnd — начало и конец удержания
+     *   (плеер показывает по ним индикатор перемотки; boost он игнорирует)
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
@@ -56,6 +58,8 @@ export class HoldActionRunner {
             getPlaybackRate: () => number;
             onWarpStart?: () => void;
             onWarpEnd?: () => void;
+            onActionStart?: (action: HoldAction) => void;
+            onActionEnd?: (action: HoldAction) => void;
         }
     ) { }
 
@@ -79,6 +83,8 @@ export class HoldActionRunner {
 
         const videoElement = this.getVideo();
         if (!videoElement) return;
+
+        this.context.onActionStart?.(action);
 
         if (action === "rewind") {
             // Считаем от цели очереди, а не от currentTime: тот отстаёт, пока
@@ -136,5 +142,7 @@ export class HoldActionRunner {
         if (action === "forward") {
             this.context.onWarpEnd?.();
         }
+
+        this.context.onActionEnd?.(action);
     }
 }
