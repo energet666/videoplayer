@@ -7,7 +7,8 @@
   2. Управление состоянием воспроизведения (пауза, громкость, время, скорость)
   3. Показ/скрытие контролов (с автоскрытием через 1 секунду)
   4. Обработку клавиатурных сочетаний (через KeyboardHandler)
-  5. Обработку жестов тачпада (через TouchpadHandler)
+  5. Обработку жестов тачпада (через TouchpadHandler) и перемотку
+     перетаскиванием мыши (через DragSeekHandler)
   6. Авто-ресайз окна Electron под размер видео
   7. Режим PiP (Picture-in-Picture)
   ============================================================================
@@ -19,12 +20,14 @@
   import SpeedIndicator from "./components/SpeedIndicator.svelte";
   import VideoControls from "./components/VideoControls.svelte";
   import WarpEffect from "./components/WarpEffect.svelte";
+  import DragSeekIndicator from "./components/DragSeekIndicator.svelte";
   import {
     togglePlay,
     togglePip,
   } from "./logic/video-actions";
   import { KeyboardHandler } from "./logic/keyboard.svelte";
   import { TouchpadHandler } from "./logic/touchpad.svelte";
+  import { DragSeekHandler } from "./logic/drag-seek.svelte";
 
   // Пропсы: URL видеофайла, передаётся из App.svelte
   let { videoSrc }: { videoSrc: string | null } = $props();
@@ -87,6 +90,13 @@
   let lastSeekFeedbackAt = 0; // Время последнего шага перемотки для накопления
   const SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS = 600;
 
+  // ========================
+  // Перемотка перетаскиванием мыши
+  // ========================
+  let isDragSeeking = $state(false); // Идёт ли перемотка перетаскиванием?
+  let dragSeekDelta = $state(0); // Смещение от точки начала жеста (секунды)
+  let dragSeekTarget = $state(0); // Время, к которому перематываем
+
   /**
    * Показывает контролы и запускает таймер автоскрытия.
    * Вызывается при движении мыши, нажатии клавиш и скролле тачпада.
@@ -139,6 +149,32 @@
   // TouchpadHandler обрабатывает горизонтальный scroll тачпада для перемотки видео.
   const touchpadHandler = new TouchpadHandler(() => videoElement, {
     onShowControls: handleMouseMove,
+  });
+
+  // ========================
+  // Инициализация обработчика перемотки мышью
+  // ========================
+  // DragSeekHandler перематывает видео перетаскиванием мыши в любом месте кадра.
+  const dragSeekHandler = new DragSeekHandler(() => videoElement, {
+    getDuration: () => duration,
+    onShowControls: handleMouseMove,
+    onSeekStart: () => {
+      // Отменяем отложенный play/pause: жест оказался перемоткой, а не кликом
+      clearTimeout(clickTimeout);
+      isDragSeeking = true;
+      isDragging = true; // Держим контролы на экране, пока идёт жест
+      showControls = true;
+      clearTimeout(controlsTimeout);
+    },
+    onSeekUpdate: (deltaSeconds: number, targetTime: number) => {
+      dragSeekDelta = deltaSeconds;
+      dragSeekTarget = targetTime;
+    },
+    onSeekEnd: () => {
+      isDragSeeking = false;
+      isDragging = false;
+      handleMouseMove(); // Запускаем автоскрытие контролов заново
+    },
   });
 
   /**
@@ -209,6 +245,10 @@
   function handleVideoClick(event: MouseEvent) {
     if (!videoElement) return;
 
+    // Click после перемотки перетаскиванием игнорируем, иначе каждый жест
+    // заканчивался бы паузой
+    if (dragSeekHandler.shouldSuppressClick()) return;
+
     const clickCountInSeries = event.detail;
     clearTimeout(clickTimeout);
 
@@ -270,6 +310,50 @@
   });
 
   // ========================
+  // Обработка перемотки перетаскиванием мыши
+  // ========================
+  // pointerdown вешаем на само видео (панель контролов и её прогресс-бар
+  // обрабатывают перетаскивание сами), а move/up — на window, чтобы жест
+  // продолжался, даже если курсор ушёл за пределы окна.
+  $effect(() => {
+    if (!videoElement) return;
+
+    const onPointerDown = (e: PointerEvent) =>
+      dragSeekHandler.handlePointerDown(e);
+    const onPointerMove = (e: PointerEvent) =>
+      dragSeekHandler.handlePointerMove(e);
+    const onPointerUp = (e: PointerEvent) => dragSeekHandler.handlePointerUp(e);
+    const onPointerCancel = (e: PointerEvent) =>
+      dragSeekHandler.handlePointerCancel(e);
+    const onKeyDown = (e: KeyboardEvent) => dragSeekHandler.handleKeyDown(e);
+    // Захват указателя потерян (окно ушло из фокуса, система забрала жест) —
+    // завершаем перемотку, иначе она "залипнет" до следующего pointerdown
+    const onInterrupt = () => dragSeekHandler.handleInterrupt();
+
+    // Очередь перемотки: следующая позиция применяется, когда видео отработало
+    // предыдущую (см. requestSeek в drag-seek.svelte.ts)
+    const onSeeked = () => dragSeekHandler.handleSeeked();
+
+    videoElement.addEventListener("pointerdown", onPointerDown);
+    videoElement.addEventListener("lostpointercapture", onInterrupt);
+    videoElement.addEventListener("seeked", onSeeked);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      videoElement.removeEventListener("pointerdown", onPointerDown);
+      videoElement.removeEventListener("lostpointercapture", onInterrupt);
+      videoElement.removeEventListener("seeked", onSeeked);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  });
+
+  // ========================
   // Обработка wheel-событий (тачпад)
   // ========================
   // Подключаем обработчик wheel с passive: false, чтобы иметь возможность
@@ -292,6 +376,7 @@
     clearTimeout(clickTimeout);
     clearTimeout(seekFeedbackTimeout);
     keyboardHandler.cleanup();
+    dragSeekHandler.cleanup();
   });
 </script>
 
@@ -299,6 +384,12 @@
 <svelte:window
   onkeydown={(e) => keyboardHandler.handleKeyDown(e)}
   onkeyup={(e) => keyboardHandler.handleKeyUp(e)}
+  onblur={() => {
+    // Окно ушло из фокуса: keyup и pointerup до нас не дойдут — сбрасываем
+    // зажатые клавиши и текущий жест перемотки вручную
+    keyboardHandler.handleWindowBlur();
+    dragSeekHandler.handleInterrupt();
+  }}
 />
 
 <!--
@@ -312,6 +403,7 @@
   bind:this={videoContainer}
   class="relative w-full h-full bg-black group overflow-hidden"
   class:cursor-none={!showControls}
+  class:cursor-ew-resize={isDragSeeking}
   role="application"
   onmousemove={handleMouseMove}
   onmouseleave={() => {
@@ -352,10 +444,19 @@
     {/key}
   {/if}
 
-  <!-- Большая кнопка Play по центру экрана (показывается только на паузе) -->
-  {#if paused}
+  <!-- Большая кнопка Play по центру экрана (показывается только на паузе).
+       Во время перемотки перетаскиванием прячем: пауза там техническая,
+       и кнопка перекрывала бы индикатор перемотки. -->
+  {#if paused && !isDragSeeking}
     <PlayOverlay {showControls} />
   {/if}
+
+  <!-- Индикатор перемотки перетаскиванием мыши -->
+  <DragSeekIndicator
+    isActive={isDragSeeking}
+    deltaSeconds={dragSeekDelta}
+    targetTime={dragSeekTarget}
+  />
 
   <!-- Warp-эффект при ускорении ×2 (зажатый пробел) -->
   <WarpEffect isActive={isWarpActive} />

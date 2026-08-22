@@ -243,6 +243,43 @@ export class KeyboardHandler {
     }
 
     /**
+     * Окно потеряло фокус (Cmd+Tab, переход в другое приложение).
+     * keyup до нас уже не дойдёт, поэтому сбрасываем состояние зажатых клавиш
+     * сами. Без этого интервал перемотки назад продолжает прыгать на −3с
+     * бесконечно, а скорость остаётся ×2/×16 — плеер выглядит зависшим.
+     */
+    handleWindowBlur() {
+        if (!this.isSpaceDown && !this.isArrowDown) return;
+
+        const videoElement = this.getVideo();
+
+        clearTimeout(this.spaceTimer);
+        clearTimeout(this.arrowTimer);
+        clearInterval(this.seekInterval);
+
+        if (videoElement) {
+            // Возвращаем скорость, выбранную пользователем (могла быть ×2 / ×16)
+            videoElement.playbackRate = this.context.getPlaybackRate();
+            // Воспроизведение было включено только ради быстрой перемотки вперёд
+            if (this.arrowRightTemporarilyPlayed) {
+                videoElement.pause();
+            }
+        }
+
+        if (this.isSpaceLongPress) {
+            this.context.onWarpEnd?.();
+        }
+
+        // Короткие действия (пауза по пробелу, перемотка на ±1с) при потере
+        // фокуса не выполняем — пользователь ушёл в другое окно, а не нажал клавишу.
+        this.isSpaceDown = false;
+        this.isSpaceLongPress = false;
+        this.isArrowDown = false;
+        this.isArrowLongPress = false;
+        this.arrowRightTemporarilyPlayed = false;
+    }
+
+    /**
      * Очистка всех таймеров и интервалов.
      * Вызывается при уничтожении компонента VideoPlayer.
      */
