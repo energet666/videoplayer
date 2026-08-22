@@ -143,8 +143,13 @@ if (!gotTheLock) {
             width: 800,          // Начальная ширина окна (пикселей)
             height: 600,         // Начальная высота окна (пикселей)
             show: false,         // Скрываем окно до применения ресайза
-            frame: false,        // Убираем стандартную рамку ОС
-            titleBarStyle: 'hidden', // Скрываем заголовок (macOS: кнопки светофора остаются)
+            frame: false,        // Убираем рамку ОС вместе с системными кнопками окна.
+            // ВАЖНО: titleBarStyle: 'hidden' здесь намеренно НЕ используется.
+            // Это macOS-only опция, которая скрывает заголовок, но ОСТАВЛЯЕТ
+            // «светофор» — он ложился поверх видео. На Windows её эффекта нет
+            // вовсе, поэтому там кнопок не было совсем. Чтобы поведение было
+            // одинаковым на всех платформах, системные кнопки убраны полностью,
+            // а свои (fullscreen / закрыть) рисуются в VideoControls.svelte.
             webPreferences: {
                 preload: path.join(__dirname, 'preload.cjs'), // Preload-скрипт (мост между main и renderer)
                 contextIsolation: true,   // Изоляция контекста (безопасность)
@@ -174,6 +179,21 @@ if (!gotTheLock) {
             // В production загружаем собранный HTML из папки dist
             mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
         }
+
+        // ====================================================================
+        // Проброс состояния полноэкранного режима в renderer
+        // ====================================================================
+        // Кнопка fullscreen в панели управления должна показывать правильную
+        // иконку (развернуть / свернуть). Слушаем нативные события окна, а не
+        // только свои клики: в fullscreen можно войти и выйти системными
+        // способами (Ctrl+Cmd+F на macOS, F11, жест мышью по краю экрана).
+        const sendFullscreenState = (isFullscreen) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('fullscreen-changed', isFullscreen);
+            }
+        };
+        mainWindow.on('enter-full-screen', () => sendFullscreenState(true));
+        mainWindow.on('leave-full-screen', () => sendFullscreenState(false));
 
         mainWindow.once('ready-to-show', () => {
             if (!fileToOpen) {
@@ -282,6 +302,33 @@ if (!gotTheLock) {
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.show();
             }
+        });
+
+        // Renderer просит закрыть окно (кнопка «крестик» в панели управления).
+        // Заменяет системную кнопку закрытия, которой нет при frame: false.
+        // На Windows/Linux за этим последует window-all-closed → app.quit(),
+        // на macOS приложение по обычаю платформы останется в Dock.
+        ipcMain.on('close-window', () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.close();
+            }
+        });
+
+        // Renderer просит переключить полноэкранный режим.
+        // Используем нативный fullscreen окна, а не HTML5 Fullscreen API:
+        // на macOS это даёт «настоящий» полный экран со скрытием строки меню,
+        // то есть ровно то, что раньше делала зелёная кнопка «светофора».
+        ipcMain.on('toggle-fullscreen', () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.setFullScreen(!mainWindow.isFullScreen());
+            }
+        });
+
+        // Renderer запрашивает текущее состояние fullscreen при монтировании
+        ipcMain.handle('is-fullscreen', () => {
+            return mainWindow && !mainWindow.isDestroyed()
+                ? mainWindow.isFullScreen()
+                : false;
         });
 
         // macOS: при клике на иконку в Dock — создаём окно, если все закрыты

@@ -34,6 +34,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Показывает главное окно (используется при выходе из режима Picture-in-Picture)
     showWindow: () => ipcRenderer.send('show-window'),
 
+    // Закрывает окно приложения (кнопка «крестик» в панели управления).
+    // Нужна, потому что системных кнопок окна нет (frame: false в main.js).
+    closeWindow: () => ipcRenderer.send('close-window'),
+
+    // Переключает нативный полноэкранный режим окна
+    toggleFullscreen: () => ipcRenderer.send('toggle-fullscreen'),
+
+    // Возвращает текущее состояние полноэкранного режима: Promise<boolean>
+    isFullscreen: () => ipcRenderer.invoke('is-fullscreen'),
+
+    // Подписка на смену полноэкранного режима. Срабатывает и на наши клики,
+    // и на системные способы входа/выхода (Ctrl+Cmd+F, F11).
+    // Возвращает функцию отписки.
+    onFullscreenChange: (callback) => {
+        const handler = (_event, value) => callback(value);
+        ipcRenderer.on('fullscreen-changed', handler);
+        return () => ipcRenderer.removeListener('fullscreen-changed', handler);
+    },
+
     // Возвращает текущую платформу: 'darwin' (macOS), 'win32' (Windows), 'linux'
     // Используется в UI для платформо-зависимых стилей (например, прозрачность фона)
     getPlatform: () => process.platform,

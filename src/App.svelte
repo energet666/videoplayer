@@ -15,6 +15,7 @@
   import { onMount } from "svelte";
   import VideoPlayer from "./lib/VideoPlayer.svelte";
   import DropVideoIcon from "./lib/icons/DropVideoIcon.svelte";
+  import { icons } from "./lib/icons";
 
   // Контейнеры, которые стабильно воспроизводятся HTML5 video в Chromium/Electron.
   const WEB_PLAYABLE_VIDEO_TYPES = [
@@ -54,6 +55,9 @@
   // Используется для выбора стилей фона (на Windows другая прозрачность)
   let platform = $state("darwin");
 
+  // Запущены ли мы внутри Electron? Кнопка закрытия окна имеет смысл только там.
+  let isElectron = $state(false);
+
   /**
    * Загружает видео по указанному URL.
    * Если ранее было загружено blob-видео (через drag & drop), освобождаем память,
@@ -75,6 +79,8 @@
    */
   onMount(() => {
     if (!window.electronAPI) return;
+
+    isElectron = true;
 
     let isUnmounted = false;
 
@@ -187,6 +193,26 @@
       class="absolute top-0 left-0 w-full h-12 z-20"
       style="-webkit-app-region: drag;"
     ></div>
+
+    <!--
+      Кнопка закрытия окна для welcome-экрана.
+      Дублирует кнопку из VideoControls намеренно: пока видео не загружено,
+      панели управления на экране нет, а системных кнопок окна нет вовсе
+      (frame: false в electron/main.js) — без неё окно нельзя было бы
+      закрыть мышью, только Cmd+Q / Alt+F4.
+      no-drag обязателен: кнопка лежит поверх области перетаскивания окна.
+    -->
+    {#if isElectron}
+      <button
+        onclick={() => window.electronAPI?.closeWindow()}
+        class="absolute top-2.5 right-2.5 z-30 p-1.5 rounded-lg text-zinc-500 dark:text-zinc-400 hover:text-white hover:bg-red-500/80 transition-colors"
+        style="-webkit-app-region: no-drag;"
+        title="Закрыть"
+        aria-label="Закрыть"
+      >
+        {@html icons.close}
+      </button>
+    {/if}
 
     <!-- ===== Welcome Screen: иконка + клавиатурные подсказки ===== -->
     <div

@@ -29,6 +29,18 @@ interface Window {
         /** Показывает окно (при выходе из PiP-режима) */
         showWindow: () => void;
 
+        /** Закрывает окно приложения (кнопка «крестик» в панели управления) */
+        closeWindow: () => void;
+
+        /** Переключает нативный полноэкранный режим окна */
+        toggleFullscreen: () => void;
+
+        /** Возвращает текущее состояние полноэкранного режима */
+        isFullscreen: () => Promise<boolean>;
+
+        /** Подписка на смену полноэкранного режима. Возвращает функцию отписки. */
+        onFullscreenChange: (callback: (isFullscreen: boolean) => void) => () => void;
+
         /** Возвращает текущую платформу (darwin, win32, linux) */
         getPlatform: () => string;
     };

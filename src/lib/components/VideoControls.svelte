@@ -28,6 +28,9 @@
         isDragging = $bindable(), // Флаг перетаскивания прогресс-бара
         paused, // Видео на паузе?
         onPipToggle, // Колбэк: переключить PiP-режим
+        onFullscreenToggle, // Колбэк: переключить полноэкранный режим окна
+        onClose, // Колбэк: закрыть окно приложения
+        isFullscreen, // Окно сейчас в полноэкранном режиме?
         onHoverStart, // Колбэк: курсор вошёл на панель (отменяет автоскрытие)
         onHoverEnd, // Колбэк: курсор покинул панель (запускает автоскрытие)
     }: {
@@ -38,6 +41,9 @@
         isDragging: boolean;
         paused: boolean;
         onPipToggle: () => void;
+        onFullscreenToggle: () => void;
+        onClose: () => void;
+        isFullscreen: boolean;
         onHoverStart: () => void;
         onHoverEnd: () => void;
     } = $props();
@@ -190,6 +196,45 @@
                 oninput={handleVolumeChange}
                 class="w-12 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2.5 [&::-webkit-slider-thumb]:h-2.5 [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:rounded-full hover:[&::-webkit-slider-thumb]:scale-110 android-slider"
             />
+        </div>
+
+        <!-- ===== Кнопки управления окном ===== -->
+        <!--
+          Заменяют системные кнопки окна (в electron/main.js стоит frame: false).
+          Раньше поведение расходилось по платформам: на macOS «светофор»
+          лежал поверх видео, на Windows кнопок не было совсем.
+          Отделены вертикальной чертой, чтобы не путались с контролами видео.
+        -->
+        <div
+            class="flex items-center gap-1 shrink-0 ml-1 pl-3 border-l border-white/15"
+        >
+            <!-- Полноэкранный режим (нативный fullscreen окна Electron) -->
+            <button
+                onclick={onFullscreenToggle}
+                class="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                title={isFullscreen
+                    ? "Выйти из полноэкранного режима"
+                    : "Полноэкранный режим"}
+                aria-label={isFullscreen
+                    ? "Выйти из полноэкранного режима"
+                    : "Полноэкранный режим"}
+            >
+                {#if isFullscreen}
+                    {@html icons.fullscreenExit}
+                {:else}
+                    {@html icons.fullscreen}
+                {/if}
+            </button>
+
+            <!-- Закрыть окно -->
+            <button
+                onclick={onClose}
+                class="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-red-500/80"
+                title="Закрыть"
+                aria-label="Закрыть"
+            >
+                {@html icons.close}
+            </button>
         </div>
     </div>
 </div>

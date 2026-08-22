@@ -69,6 +69,13 @@
   let isPip = $state(false); // Видео в режиме PiP?
 
   // ========================
+  // Полноэкранный режим окна
+  // ========================
+  // Состояние приходит из main-процесса, а не хранится тут: в fullscreen
+  // можно войти и выйти мимо нашей кнопки (Ctrl+Cmd+F на macOS, F11).
+  let isFullscreen = $state(false);
+
+  // ========================
   // Warp-эффект (ускорение ×2)
   // ========================
   let isWarpActive = $state(false); // Показывать ли warp-эффект?
@@ -245,6 +252,24 @@
   });
 
   // ========================
+  // Синхронизация состояния fullscreen с main-процессом
+  // ========================
+  // Спрашиваем текущее состояние при монтировании и подписываемся на события
+  // окна, чтобы иконка кнопки всегда соответствовала реальности.
+  $effect(() => {
+    const api = window.electronAPI;
+    if (!api?.onFullscreenChange) return;
+
+    api.isFullscreen?.().then((value) => {
+      isFullscreen = value;
+    });
+
+    return api.onFullscreenChange((value) => {
+      isFullscreen = value;
+    });
+  });
+
+  // ========================
   // Обработка wheel-событий (тачпад)
   // ========================
   // Подключаем обработчик wheel с passive: false, чтобы иметь возможность
@@ -347,6 +372,9 @@
     bind:isDragging
     {paused}
     onPipToggle={() => togglePip(videoElement)}
+    onFullscreenToggle={() => window.electronAPI?.toggleFullscreen()}
+    onClose={() => window.electronAPI?.closeWindow()}
+    {isFullscreen}
     onHoverStart={() => {
       isMouseOverControls = true;
       clearTimeout(controlsTimeout); // Не прячем контролы, пока курсор над ними
