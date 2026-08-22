@@ -39,17 +39,18 @@ Input logic lives in `src/lib/logic/` as **plain classes constructed with a `() 
 
 ### Behaviors that are easy to break
 
-- **Short vs. long press**: keydown starts a 200 ms timer; release before it fires = short action, after = long action. Both Space and ←/→ use this, each with its own `isXDown` / `isXLongPress` / timer trio, plus a re-entrancy guard against key auto-repeat.
+- **Short vs. long press**: keydown starts a 200 ms timer; release before it fires = short action, after = long action. Both Space and ←/→ use this, each with its own `isXDown` / `isXLongPress` / timer trio, plus a re-entrancy guard against key auto-repeat. Window `blur` must reset that state via `handleWindowBlur()`: the `keyup` never arrives after Cmd+Tab, and the rewind interval would keep jumping −3 s forever with `playbackRate` stuck at ×2/×16.
 - **`userPlaybackRate` vs `videoElement.playbackRate`** are deliberately separate. The element's rate is temporarily overridden (×2 on held Space, ×16 on held →) and restored from `userPlaybackRate` on keyup. Never read the user's chosen speed off the element.
 - **Rewind uses `setInterval`** (−3 s every 300 ms), because HTML5 video has no negative `playbackRate`.
 - **Window auto-resize**: on `loadedmetadata` the renderer sends `resize-window`; main sets the aspect ratio, scales to fit the work area, centers, and *then* shows the window. The window starts with `show: false` and there is a 1 s fallback `setTimeout` in `ready-to-show` — this is what prevents the start-screen flash when opening via file association. Don't make the window visible earlier.
+- **Drag-to-seek** (`src/lib/logic/drag-seek.svelte.ts`): left button held anywhere on the video, 0.05 s per pixel of horizontal movement — the same sensitivity as `TouchpadHandler`. A 6 px threshold separates it from a click; below it the gesture is still a click. It pauses the video for the duration of the drag and resumes on release if it was playing, and Escape/`pointercancel` restore the starting position. `click` always fires after `pointerup`, so `shouldSuppressClick()` eats exactly one click per completed drag — without it every drag would end in a pause. `pointerdown` is bound to the `<video>` element, `pointermove`/`pointerup` to `window` (plus `setPointerCapture`), so the gesture survives the cursor leaving the window. Seeks are serialized, never per-frame: `requestSeek()` stores the latest target and only assigns `currentTime` when the element is not already `seeking`, with the `seeked` listener flushing whatever accumulated. Assigning every frame is what made a fast drag freeze on a `file://` source — every assignment cancelled the in-flight seek, so no frame and no `timeupdate` came out until the chain unwound. A lost `pointerup` would wedge the player — the video stays paused and every mouse move keeps dragging `currentTime` — so the gesture self-heals: `handlePointerMove` ends it when `e.buttons === 0`, and `lostpointercapture`/window `blur` call `handleInterrupt()`.
 - **Click handling** is YouTube-style: `event.detail === 1` schedules play/pause after 220 ms; even counts in the series seek ±10 s by screen half and cancel the pending toggle.
 
 ### Platform-conditional window settings (`electron/main.js`)
 
 `transparent` is `true` everywhere *except* win32, where it would break `backgroundMaterial: 'acrylic'`. `App.svelte` mirrors this with a heavier welcome-screen background on non-darwin platforms.
 
-`webSecurity: process.env.NODE_ENV !== 'development'` — disabled in **development** only, enabled in production. Note the docblock above `createWindow` and the decision table in `implementation_plan.md` both still describe an unconditional `webSecurity: false`; the conditional in the code is what actually runs.
+`webSecurity: process.env.NODE_ENV !== 'development'` — disabled in **development** only, enabled in production.
 
 ### Window controls (no native chrome)
 

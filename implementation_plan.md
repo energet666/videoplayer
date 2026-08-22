@@ -2,7 +2,7 @@
 
 > Десктопный видеоплеер на **Svelte 5 + Tailwind CSS 4 + Electron**.
 > Минималистичный дизайн в стиле Apple с glassmorphism-контролами,
-> blur-эффектами окна и управлением с клавиатуры/тачпада.
+> blur-эффектами окна и управлением с клавиатуры, тачпада и мыши.
 
 ---
 
@@ -27,7 +27,8 @@ videoplayer/
 │       ├── components/        #   UI-компоненты плеера
 │       │   ├── VideoControls.svelte  # Нижняя панель: прогресс, громкость, PiP
 │       │   ├── PlayOverlay.svelte    # Большая кнопка Play по центру
-│       │   └── SpeedIndicator.svelte # Бейдж скорости (1.5x, 2x)
+│       │   ├── SpeedIndicator.svelte # Бейдж скорости (1.5x, 2x)
+│       │   └── DragSeekIndicator.svelte # Бейдж перемотки мышью (+1:23 → 14:05)
 │       │
 │       ├── icons/             #   SVG-иконки
 │       │   ├── index.ts       #     Коллекция inline-иконок (play, mute, volume, pip)
@@ -36,6 +37,7 @@ videoplayer/
 │       └── logic/             #   Бизнес-логика (отделена от UI)
 │           ├── keyboard.svelte.ts   # Обработчик клавиатуры (Space, стрелки)
 │           ├── touchpad.svelte.ts   # Обработчик жестов тачпада (горизонтальный свайп)
+│           ├── drag-seek.svelte.ts  # Перемотка перетаскиванием мыши по кадру
 │           └── video-actions.ts     # Утилиты: safePlay, togglePlay, fullscreen, PiP
 │
 ├── build/                     # Ресурсы для сборки (иконки приложения)
@@ -89,11 +91,12 @@ videoplayer/
 - [x] Создать точку входа `electron/main.js`
 - [x] Настроить создание окна (`BrowserWindow`):
   - `frame: false` — убрать стандартную рамку ОС
-  - `titleBarStyle: 'hidden'` — скрыть заголовок (на macOS кнопки светофора остаются)
+  - Без `titleBarStyle` — системных кнопок окна нет ни на одной платформе,
+    свои (fullscreen / закрыть) нарисованы в `VideoControls.svelte`
   - `transparent: true` на macOS / `false` на Windows (для acrylic blur)
   - `vibrancy: 'fullscreen-ui'` — blur-эффект на macOS
   - `backgroundMaterial: 'acrylic'` — blur-эффект на Windows 11
-  - `webSecurity: false` — разрешить загрузку `file://` URL (локальные видео)
+  - `webSecurity: process.env.NODE_ENV !== 'development'` — выключен только в dev
 - [x] Настроить загрузку URL:
   - Dev: `http://localhost:5173` (Vite dev-server)
   - Production: `dist/index.html` (собранный бандл)
@@ -129,8 +132,9 @@ videoplayer/
 - [x] Создать компонент `<VideoPlayer>` с HTML5 `<video>`
 - [x] Двусторонняя привязка состояния: `bind:paused`, `bind:currentTime`, `bind:volume`, `bind:duration`
 - [x] Автозапуск видео (`autoplay`)
-- [x] Клик по видео → play/pause
-- [x] Двойной клик → полноэкранный режим
+- [x] Клик по видео → play/pause (с задержкой 220мс, чтобы не конфликтовать с двойным)
+- [x] Двойной клик → перемотка ±10 секунд: назад по левой половине кадра, вперёд по правой
+  - Серия кликов подряд накапливает шаг (10, 20, 30 секунд) и показывает его бейджем
 
 #### 4.3. Адаптация окна под видео
 > Файлы: `src/lib/VideoPlayer.svelte` → `electron/main.js` (через IPC).
@@ -211,6 +215,27 @@ videoplayer/
   - Инвертированное направление (свайп вправо = перемотка вперёд)
   - `preventDefault()` блокирует навигацию браузера
 
+#### 7.3. Перемотка мышью (drag-seek)
+> Файл: `src/lib/logic/drag-seek.svelte.ts`
+
+- [x] Зажать левую кнопку в любом месте кадра и вести влево/вправо → перемотка
+  - Чувствительность: 0.05 сек/пиксель — та же, что у тачпада
+  - Порог 6 пикселей отделяет жест от обычного клика; точка отсчёта берётся в
+    момент пересечения порога, а не при нажатии кнопки
+  - На время жеста видео на паузе (кадры обновляются чисто, звук не дробится),
+    на отпускании воспроизведение возобновляется, если оно шло
+  - `Escape` и `pointercancel` отменяют жест и возвращают исходную позицию
+- [x] Очередь seek-ов вместо присваивания каждый кадр
+  - Новая позиция уходит в элемент только когда он не в состоянии `seeking`,
+    накопленная применяется по событию `seeked`
+  - *Присваивание каждый кадр вешало видео на источнике `file://`: каждый seek
+    отменял предыдущий, элемент не отдавал ни кадра, ни `timeupdate`*
+- [x] Самозавершение жеста, если `pointerup` не дошёл
+  - `pointermove` с `buttons === 0`, `lostpointercapture`, `blur` окна
+  - *Иначе жест «залипал»: видео стояло на паузе, а движение мыши продолжало
+    утаскивать `currentTime`*
+- [x] `click` после перемотки подавляется — иначе каждый жест заканчивался паузой
+
 ### 8. Доработки и улучшения
 
 - [x] Blur-эффекты окна:
@@ -254,7 +279,7 @@ videoplayer/
 - [x] Конфигурация `tsconfig.json` (strict mode)
 - [x] Конвертация `.js` → `.ts`, добавление `lang="ts"` в Svelte-компоненты
 - [x] Типизация `electronAPI` через расширение `Window` интерфейса
-- [x] Выделение логики в отдельные `.ts`-файлы (`keyboard.svelte.ts`, `touchpad.svelte.ts`, `video-actions.ts`)
+- [x] Выделение логики в отдельные `.ts`-файлы (`keyboard.svelte.ts`, `touchpad.svelte.ts`, `drag-seek.svelte.ts`, `video-actions.ts`)
 
 ---
 
@@ -262,7 +287,7 @@ videoplayer/
 
 | Решение | Почему |
 |---------|--------|
-| `webSecurity: false` | Чтобы `<video>` мог загружать локальные файлы через `file://` URL |
+| `webSecurity` выключен только в dev | Чтобы в dev-режиме страница с `http://localhost:5173` могла тянуть локальные файлы; в проде приложение грузится с `file://` и защита включена |
 | `transparent` только на macOS | На Windows `transparent: true` ломает acrylic blur |
 | `contextIsolation: true` | Безопасность: renderer не имеет прямого доступа к Node.js |
 | `safePlay()` вместо `.play()` | `play()` возвращает Promise, может кинуть AbortError при быстром play/pause |

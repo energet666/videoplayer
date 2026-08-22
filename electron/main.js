@@ -133,10 +133,10 @@ if (!gotTheLock) {
      * Создаёт главное окно приложения (BrowserWindow).
      *
      * Настройки окна включают:
-     * - Без рамки (frame: false) с кастомным titleBar
+     * - Без рамки (frame: false), свои кнопки окна вместо системных
      * - Прозрачность и blur-эффекты (vibrancy для macOS, acrylic для Windows 11)
      * - Безопасность: contextIsolation включён, nodeIntegration выключен
-     * - webSecurity: false — для загрузки локальных видеофайлов через file://
+     * - webSecurity выключен только в dev-режиме (в проде включён)
      */
     function createWindow() {
         mainWindow = new BrowserWindow({
