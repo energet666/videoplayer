@@ -22,6 +22,7 @@
 // ============================================================================
 
 import { safePlay, togglePlay } from "./video-actions";
+import type { SeekQueue } from "./seek-queue";
 
 // Доступные скорости воспроизведения (переключаются стрелками ↑↓)
 export const availableSpeeds = [1.0, 1.25, 1.5, 2.0];
@@ -47,6 +48,8 @@ export class KeyboardHandler {
      * @param getVideo — функция-getter для получения HTMLVideoElement.
      *   Используем getter, потому что элемент может быть ещё не создан на момент
      *   инициализации handler'а.
+     * @param seekQueue — общая очередь перемоток: все жесты ходят через неё,
+     *   иначе позиции считаются от разных источников и метка на баре скачет.
      * @param context — набор колбэков для взаимодействия с UI-компонентом:
      *   - getPlaybackRate: получить скорость, установленную пользователем
      *   - setPlaybackRate: установить новую скорость
@@ -58,6 +61,7 @@ export class KeyboardHandler {
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
+        private seekQueue: SeekQueue,
         private context: {
             getPlaybackRate: () => number;
             setPlaybackRate: (rate: number) => void;
@@ -162,9 +166,10 @@ export class KeyboardHandler {
                         // HTML5 video не поддерживает отрицательную playbackRate,
                         // поэтому используем setInterval для имитации перемотки назад.
                         const doRewind = () => {
-                            videoElement.currentTime = Math.max(
-                                0,
-                                videoElement.currentTime - 3,
+                            // Считаем от цели очереди, а не от currentTime: тот
+                            // отстаёт, пока предыдущий прыжок не завершился
+                            this.seekQueue.request(
+                                Math.max(0, this.seekQueue.getTargetTime() - 3),
                             );
                         };
                         doRewind();       // Первый прыжок — сразу
@@ -223,9 +228,11 @@ export class KeyboardHandler {
                     const direction = isRight ? 1 : -1;
                     const duration = this.context.getDuration();
 
-                    videoElement.currentTime = Math.max(
-                        0,
-                        Math.min(duration, videoElement.currentTime + direction),
+                    this.seekQueue.request(
+                        Math.max(
+                            0,
+                            Math.min(duration, this.seekQueue.getTargetTime() + direction),
+                        ),
                     );
                 }
             } else {

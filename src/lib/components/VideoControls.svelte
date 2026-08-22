@@ -22,7 +22,8 @@
     // ========================
     let {
         showControls, // Показывать ли панель?
-        currentTime = $bindable(), // Текущее время (двусторонняя привязка к видео)
+        displayTime, // Время для отрисовки — обновляется каждый кадр, а не по timeupdate
+        onSeek, // Колбэк перемотки: плеер отправит позицию в общую очередь seek-ов
         duration, // Общая длительность видео
         volume = $bindable(), // Громкость (двусторонняя привязка к видео)
         isDragging = $bindable(), // Флаг перетаскивания прогресс-бара
@@ -35,7 +36,8 @@
         onHoverEnd, // Колбэк: курсор покинул панель (запускает автоскрытие)
     }: {
         showControls: boolean;
-        currentTime: number;
+        displayTime: number;
+        onSeek: (time: number) => void;
         duration: number;
         volume: number;
         isDragging: boolean;
@@ -55,11 +57,13 @@
 
     /**
      * Обработчик перемотки: пользователь двигает прогресс-бар.
-     * Обновляет currentTime (привязан к <video>).
+     * Позицию не пишем в видео напрямую — отдаём плееру, а он ставит её в общую
+     * очередь seek-ов (см. seek-queue.ts). Событие input прилетает на каждое
+     * движение мыши, и прямая запись отменяла бы предыдущий seek.
      */
     function handleSeek(e: Event) {
         const target = e.target as HTMLInputElement;
-        currentTime = parseFloat(target.value);
+        onSeek(parseFloat(target.value));
     }
 
     /**
@@ -115,7 +119,7 @@
     >
         <!-- Текущее время воспроизведения (например "1:23") -->
         <span class="text-xs font-medium text-white/70 w-8 shrink-0"
-            >{formatTime(currentTime)}</span
+            >{formatTime(displayTime)}</span
         >
 
         <!-- ===== Прогресс-бар ===== -->
@@ -130,7 +134,7 @@
                 min="0"
                 max={duration || 100}
                 step="0.1"
-                value={currentTime}
+                value={displayTime}
                 oninput={handleSeek}
                 onmousedown={() => (isDragging = true)}
                 onmouseup={() => (isDragging = false)}
@@ -138,10 +142,12 @@
             />
             <!-- Фон трека (серая полоска) -->
             <div class="w-full h-1 bg-white/20 rounded-full overflow-hidden">
-                <!-- Заполненная часть трека (белая полоска — прогресс) -->
+                <!-- Заполненная часть трека (белая полоска — прогресс).
+                     Без CSS-перехода: ширина и так пересчитывается каждый кадр,
+                     а transition добавлял бы отставание поверх этого. -->
                 <div
-                    class="h-full bg-white/90 rounded-full transition-all duration-75"
-                    style="width: {(currentTime / duration) * 100}%"
+                    class="h-full bg-white/90 rounded-full"
+                    style="width: {(displayTime / duration) * 100}%"
                 ></div>
             </div>
             <!--
@@ -151,7 +157,7 @@
             -->
             <div
                 class="absolute w-3 h-3 bg-white rounded-full shadow-md transition-opacity duration-200 pointer-events-none"
-                style="left: {(currentTime / duration) *
+                style="left: {(displayTime / duration) *
                     100}%; transform: translateX(-50%) scale({paused ||
                 showControls
                     ? 1

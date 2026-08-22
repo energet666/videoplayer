@@ -8,9 +8,9 @@
 // - пока смещение меньше DRAG_THRESHOLD_PX, это ещё обычный клик (play/pause),
 //   перемотка не начинается — иначе дрожание руки ломало бы клик
 // - после порога: видео ставится на паузу (кадры обновляются чисто, звук не
-//   дробится), currentTime меняется вживую — но не чаще, чем видео успевает
-//   отработать предыдущий seek, — а на отпускании воспроизведение
-//   возобновляется, если оно шло
+//   дробится), позиция меняется вживую через общую очередь перемоток
+//   (см. seek-queue.ts), а на отпускании воспроизведение возобновляется,
+//   если оно шло
 // - Escape / pointercancel отменяют перемотку и возвращают исходную позицию
 //
 // Чувствительность совпадает с TouchpadHandler: 0.05 с на пиксель.
@@ -20,6 +20,7 @@
 // ============================================================================
 
 import { safePlay } from "./video-actions";
+import type { SeekQueue } from "./seek-queue";
 
 export class DragSeekHandler {
     // Сколько секунд перемотки даёт 1 пиксель движения мыши.
@@ -38,11 +39,11 @@ export class DragSeekHandler {
     private targetTime = 0;                   // Время, к которому ведём сейчас
     private isSeeking = false;                // Порог пройден, идёт перемотка?
     private wasPlaying = false;               // Видео играло до начала перемотки?
-    private pendingSeek: number | null = null; // Время, которое ждёт своей очереди на применение
     private clickSuppressed = false;          // Погасить ближайший click после перемотки?
 
     /**
      * @param getVideo — getter для HTMLVideoElement (может быть undefined)
+     * @param seekQueue — общая очередь перемоток (одна на элемент)
      * @param context.getDuration — длительность видео из состояния плеера
      * @param context.onShowControls — показать контролы (виден прогресс-бар)
      * @param context.onSeekStart — перемотка началась (порог пройден)
@@ -51,6 +52,7 @@ export class DragSeekHandler {
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
+        private seekQueue: SeekQueue,
         private context: {
             getDuration: () => number;
             onShowControls: () => void;
@@ -135,7 +137,7 @@ export class DragSeekHandler {
             Math.min(duration, this.startTime + (e.clientX - this.startX) * this.sensitivity)
         );
 
-        this.requestSeek(this.targetTime);
+        this.seekQueue.request(this.targetTime);
         this.context.onSeekUpdate(this.targetTime - this.startTime, this.targetTime);
         this.context.onShowControls();
     }
@@ -154,14 +156,6 @@ export class DragSeekHandler {
     handlePointerCancel(e: PointerEvent) {
         if (this.pointerId === null || e.pointerId !== this.pointerId) return;
         this.finish(true);
-    }
-
-    /**
-     * Видео закончило предыдущий seek — применяем накопленную позицию.
-     * Вызывается из VideoPlayer по событию 'seeked'.
-     */
-    handleSeeked() {
-        this.flushSeek();
     }
 
     /**
@@ -194,43 +188,7 @@ export class DragSeekHandler {
 
     /** Сброс очереди перемотки при уничтожении компонента. */
     cleanup() {
-        this.pendingSeek = null;
-    }
-
-    /**
-     * Ставит время в очередь и применяет его, если видео не занято.
-     *
-     * Перемотка идёт по одной за раз: пока элемент в состоянии seeking, новые
-     * позиции только копятся, а применяется последняя — по событию 'seeked'.
-     * Присваивать currentTime чаще (например, каждый кадр) нельзя: на источнике
-     * с реальной задержкой чтения — file:// вместо буфера в памяти — seek'и
-     * начинают отменять друг друга, и элемент залипает в seeking насовсем:
-     * картинка стоит, timeupdate не приходит, прогресс-бар не двигается.
-     */
-    private requestSeek(time: number) {
-        if (!Number.isFinite(time)) return;
-
-        this.pendingSeek = time;
-
-        const videoElement = this.getVideo();
-        if (!videoElement || videoElement.seeking) return;
-
-        this.flushSeek();
-    }
-
-    /** Применяет накопленную позицию, если она есть. */
-    private flushSeek() {
-        if (this.pendingSeek === null) return;
-
-        const videoElement = this.getVideo();
-        if (!videoElement) {
-            this.pendingSeek = null;
-            return;
-        }
-
-        const time = this.pendingSeek;
-        this.pendingSeek = null;
-        videoElement.currentTime = time;
+        this.seekQueue.reset();
     }
 
     /**
@@ -245,15 +203,12 @@ export class DragSeekHandler {
         this.isSeeking = false;
 
         // Порог не пройден — это был обычный клик, отдаём его play/pause
-        if (!wasSeeking) {
-            this.pendingSeek = null;
-            return;
-        }
+        if (!wasSeeking) return;
 
         if (videoElement) {
             // Финальная позиция идёт через ту же очередь: если предыдущий seek
             // ещё не закончился, она применится по событию 'seeked'
-            this.requestSeek(cancelled ? this.startTime : this.targetTime);
+            this.seekQueue.request(cancelled ? this.startTime : this.targetTime);
             if (this.wasPlaying) safePlay(videoElement);
         }
 

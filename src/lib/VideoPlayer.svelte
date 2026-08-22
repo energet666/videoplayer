@@ -28,6 +28,7 @@
   import { KeyboardHandler } from "./logic/keyboard.svelte";
   import { TouchpadHandler } from "./logic/touchpad.svelte";
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
+  import { SeekQueue } from "./logic/seek-queue";
 
   // Пропсы: URL видеофайла, передаётся из App.svelte
   let { videoSrc }: { videoSrc: string | null } = $props();
@@ -42,6 +43,11 @@
   let paused = $state(true); // Видео на паузе?
   let duration = $state(0); // Общая длительность видео (секунды)
   let currentTime = $state(0); // Текущая позиция воспроизведения (секунды)
+  // Позиция для отрисовки прогресс-бара. Отдельно от currentTime, потому что
+  // тот обновляется по событию timeupdate — а оно приходит всего ~4 раза в
+  // секунду, и метка на баре двигалась рывками. Во время перемотки ведётся за
+  // целью очереди seek-ов, чтобы не ждать, пока видео доедет.
+  let displayTime = $state(0);
   let volume = $state(1); // Громкость (0.0 — 1.0)
 
   // ========================
@@ -94,6 +100,8 @@
   // Перемотка перетаскиванием мыши
   // ========================
   let isDragSeeking = $state(false); // Идёт ли перемотка перетаскиванием?
+  let isTouchpadSeeking = $state(false); // Идёт ли перемотка свайпом по тачпаду?
+  let touchpadSeekTimeout: ReturnType<typeof setTimeout>; // Таймер затухания свайпа
   let dragSeekDelta = $state(0); // Смещение от точки начала жеста (секунды)
   let dragSeekTarget = $state(0); // Время, к которому перематываем
 
@@ -114,12 +122,20 @@
   }
 
   // ========================
+  // Очередь перемоток
+  // ========================
+  // Одна на элемент, общая для всех жестов (клавиатура, тачпад, мышь): видео
+  // получает не больше одной перемотки за раз, промежуточные позиции
+  // схлопываются, а метка на баре ведётся за целью (см. seek-queue.ts).
+  const seekQueue = new SeekQueue(() => videoElement);
+
+  // ========================
   // Инициализация обработчика клавиатуры
   // ========================
   // KeyboardHandler управляет всеми клавиатурными сочетаниями.
   // Передаём getter для videoElement (может быть undefined при инициализации)
   // и набор колбэков для управления состоянием UI.
-  const keyboardHandler = new KeyboardHandler(() => videoElement, {
+  const keyboardHandler = new KeyboardHandler(() => videoElement, seekQueue, {
     getPlaybackRate: () => userPlaybackRate,
     setPlaybackRate: (rate: number) => {
       userPlaybackRate = rate;
@@ -147,15 +163,25 @@
   // Инициализация обработчика тачпада
   // ========================
   // TouchpadHandler обрабатывает горизонтальный scroll тачпада для перемотки видео.
-  const touchpadHandler = new TouchpadHandler(() => videoElement, {
+  const touchpadHandler = new TouchpadHandler(() => videoElement, seekQueue, {
+    getDuration: () => duration,
     onShowControls: handleMouseMove,
+    // У свайпа нет явного конца — считаем жест законченным, если события
+    // wheel перестали приходить (инерция затухает сама)
+    onSeekUpdate: () => {
+      isTouchpadSeeking = true;
+      clearTimeout(touchpadSeekTimeout);
+      touchpadSeekTimeout = setTimeout(() => {
+        isTouchpadSeeking = false;
+      }, 300);
+    },
   });
 
   // ========================
   // Инициализация обработчика перемотки мышью
   // ========================
   // DragSeekHandler перематывает видео перетаскиванием мыши в любом месте кадра.
-  const dragSeekHandler = new DragSeekHandler(() => videoElement, {
+  const dragSeekHandler = new DragSeekHandler(() => videoElement, seekQueue, {
     getDuration: () => duration,
     onShowControls: handleMouseMove,
     onSeekStart: () => {
@@ -215,12 +241,14 @@
     const isLeftHalf = event.clientX < rect.left + rect.width / 2;
     const side: "left" | "right" = isLeftHalf ? "left" : "right";
     const seekDelta = isLeftHalf ? -10 : 10;
+    // Считаем от цели очереди, а не от currentTime: серия двойных кликов подряд
+    // накапливает шаг (10, 20, 30 секунд), а видео за ней ещё не доехало
     const nextTime = Math.min(
       duration || videoElement.duration || 0,
-      Math.max(0, videoElement.currentTime + seekDelta),
+      Math.max(0, seekQueue.getTargetTime() + seekDelta),
     );
 
-    videoElement.currentTime = nextTime;
+    seekQueue.request(nextTime);
     const shouldAccumulate =
       seekFeedbackSide === side &&
       now - lastSeekFeedbackAt <= SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS;
@@ -310,6 +338,32 @@
   });
 
   // ========================
+  // Плавное движение метки на прогресс-баре
+  // ========================
+  // Пока видео играет (или идёт перемотка мышью), позицию для отрисовки
+  // опрашиваем каждый кадр: currentTime у элемента идёт непрерывно, это
+  // событие timeupdate редкое. На паузе кадровый опрос не нужен — просто
+  // повторяем реальную позицию.
+  $effect(() => {
+    if (paused && !isDragSeeking && !isTouchpadSeeking && !isDragging) {
+      displayTime = currentTime;
+      return;
+    }
+
+    let frame: number;
+    const tick = () => {
+      // Всегда берём цель очереди перемоток: вне жеста это и есть currentTime,
+      // а во время жеста — позиция, к которой ведёт пользователь. Видео догоняет
+      // её через очередь, и метка не должна ждать, пока доедет seek.
+      displayTime = seekQueue.getTargetTime();
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  });
+
+  // ========================
   // Обработка перемотки перетаскиванием мыши
   // ========================
   // pointerdown вешаем на само видео (панель контролов и её прогресс-бар
@@ -330,9 +384,9 @@
     // завершаем перемотку, иначе она "залипнет" до следующего pointerdown
     const onInterrupt = () => dragSeekHandler.handleInterrupt();
 
-    // Очередь перемотки: следующая позиция применяется, когда видео отработало
-    // предыдущую (см. requestSeek в drag-seek.svelte.ts)
-    const onSeeked = () => dragSeekHandler.handleSeeked();
+    // Очередь перемоток: следующая позиция применяется, когда видео отработало
+    // предыдущую (см. seek-queue.ts)
+    const onSeeked = () => seekQueue.handleSeeked();
 
     videoElement.addEventListener("pointerdown", onPointerDown);
     videoElement.addEventListener("lostpointercapture", onInterrupt);
@@ -375,6 +429,7 @@
     clearTimeout(speedIndicatorTimeout);
     clearTimeout(clickTimeout);
     clearTimeout(seekFeedbackTimeout);
+    clearTimeout(touchpadSeekTimeout);
     keyboardHandler.cleanup();
     dragSeekHandler.cleanup();
   });
@@ -467,7 +522,8 @@
   <!-- Нижняя панель управления (прогресс-бар, громкость, PiP-кнопка) -->
   <VideoControls
     {showControls}
-    bind:currentTime
+    {displayTime}
+    onSeek={(time) => seekQueue.request(time)}
     {duration}
     bind:volume
     bind:isDragging
