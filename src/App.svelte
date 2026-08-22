@@ -219,7 +219,7 @@
       class="absolute inset-0 z-10 flex flex-col items-center justify-center pointer-events-none"
     >
       <div
-        class="flex flex-col items-center gap-6 max-w-sm w-full px-6 transition-transform duration-300"
+        class="flex flex-col items-center gap-6 max-w-3xl w-full px-6 transition-transform duration-300"
         class:scale-105={isDragging}
       >
         <!-- Иконка «бросьте видео» + поддерживаемые форматы -->
@@ -235,42 +235,84 @@
         <!-- Разделительная линия -->
         <div class="w-full border-t border-zinc-200 dark:border-zinc-800"></div>
 
-        <!-- Подсказки по клавиатурным сочетаниям -->
-        <div class="w-full text-sm text-zinc-600 dark:text-zinc-400 space-y-2">
-          <div class="grid grid-cols-[90px_1fr] gap-x-5 gap-y-2.5 items-center">
-            <!-- Пробел: пауза / воспроизведение -->
-            <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
-            <span>Пауза / Воспроизведение</span>
-
-            <!-- Пробел (зажать): ускорение ×2 -->
-            <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
-            <span>Зажать — ускорение ×2</span>
-
-            <!-- Стрелки влево/вправо: перемотка ±1 сек -->
-            <div class="flex gap-1">
-              <kbd class="flex-1">←</kbd><kbd class="flex-1">→</kbd>
-            </div>
-            <span>Перемотка ±1 сек</span>
-
-            <!-- Стрелки (зажать): быстрая перемотка -->
-            <div class="flex gap-1">
-              <kbd class="flex-1">←</kbd><kbd class="flex-1">→</kbd>
-            </div>
-            <span>Зажать — быстрая перемотка</span>
-
-            <!-- Стрелки вверх/вниз: скорость воспроизведения -->
-            <div class="flex gap-1">
-              <kbd class="flex-1">↑</kbd><kbd class="flex-1">↓</kbd>
-            </div>
-            <span>Скорость воспроизведения</span>
-
-            <!-- Двойной клик: перемотка ±10 секунд -->
-            <div
-              class="flex justify-center items-center h-[28px] text-zinc-400 dark:text-zinc-500 font-mono text-sm"
+        <!--
+          Подсказки по управлению. Две колонки: клавиатура и мышь/тачпад.
+          Значения обязаны совпадать с логикой в src/lib/logic/ — короткие
+          нажатия стрелок дают ±3с (SHORT_SEEK_SECONDS), удержание ← ползёт
+          назад по 1с, удержание → это ×16 (см. hold-actions.ts), а удержание
+          левой кнопки повторяет их по зонам кадра (hold-zones.svelte.ts).
+        -->
+        <div
+          class="w-full text-sm text-zinc-600 dark:text-zinc-400 grid gap-x-8 gap-y-6 sm:grid-cols-2"
+        >
+          <!-- ===== Колонка 1: клавиатура ===== -->
+          <div class="space-y-2.5">
+            <h2
+              class="text-[11px] uppercase tracking-widest text-zinc-400 dark:text-zinc-500 font-semibold"
             >
-              2×клик
+              Клавиатура
+            </h2>
+            <div class="grid grid-cols-[84px_1fr] gap-x-4 gap-y-2.5 items-center">
+              <!-- Пробел: пауза / воспроизведение -->
+              <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
+              <span>Пауза / Воспроизведение</span>
+
+              <!-- Пробел (зажать): ускорение ×2 -->
+              <div class="flex gap-1"><kbd class="flex-1">Space</kbd></div>
+              <span>Зажать — ускорение ×2</span>
+
+              <!-- Стрелки влево/вправо: перемотка ±3 сек -->
+              <div class="flex gap-1">
+                <kbd class="flex-1">←</kbd><kbd class="flex-1">→</kbd>
+              </div>
+              <span>Перемотка ±3 сек</span>
+
+              <!-- Стрелка влево (зажать): плавная перемотка назад по 1 сек -->
+              <div class="flex gap-1"><kbd>←</kbd></div>
+              <span>Зажать — перемотка назад</span>
+
+              <!-- Стрелка вправо (зажать): ускорение ×16 с warp-эффектом -->
+              <div class="flex gap-1"><kbd>→</kbd></div>
+              <span>Зажать — ускорение ×16</span>
+
+              <!-- Стрелки вверх/вниз: скорость воспроизведения -->
+              <div class="flex gap-1">
+                <kbd class="flex-1">↑</kbd><kbd class="flex-1">↓</kbd>
+              </div>
+              <span>Скорость воспроизведения</span>
             </div>
-            <span>Перемотка ±10 сек</span>
+          </div>
+
+          <!-- ===== Колонка 2: мышь и тачпад ===== -->
+          <div class="space-y-2.5">
+            <h2
+              class="text-[11px] uppercase tracking-widest text-zinc-400 dark:text-zinc-500 font-semibold"
+            >
+              Мышь и тачпад
+            </h2>
+            <div class="grid grid-cols-[92px_1fr] gap-x-4 gap-y-2.5 items-start">
+              <!-- Одиночный клик: пауза / воспроизведение -->
+              <span class="gesture">Клик</span>
+              <span class="leading-7">Пауза / Воспроизведение</span>
+
+              <!-- Двойной клик: перемотка ±10 секунд по половине кадра -->
+              <span class="gesture">2×клик</span>
+              <span class="leading-7">Перемотка ±10 сек</span>
+
+              <!-- Удержание левой кнопки: те же длинные действия по зонам кадра -->
+              <span class="gesture">Зажать</span>
+              <span class="leading-7"
+                >Слева — назад, в центре — ×2, справа — ×16</span
+              >
+
+              <!-- Перетаскивание: перемотка курсором -->
+              <span class="gesture">Тянуть</span>
+              <span class="leading-7">Перемотка курсором</span>
+
+              <!-- Горизонтальный свайп по тачпаду: перемотка -->
+              <span class="gesture">Свайп</span>
+              <span class="leading-7">Перемотка на тачпаде</span>
+            </div>
           </div>
         </div>
       </div>
@@ -322,6 +364,28 @@
     white-space: nowrap;
   }
 
+  /* Жесты мыши и тачпада: та же сетка, но «плоская» плашка,
+     чтобы их не читали как физические клавиши */
+  .gesture {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 28px;
+    padding: 0 10px;
+    width: 100%;
+    font-size: 13px;
+    text-align: center;
+
+    background: rgba(113, 113, 122, 0.08);
+    border: 1px dashed #d4d4d8;
+    color: #52525b;
+
+    border-radius: 6px;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    white-space: nowrap;
+  }
+
   /* Тёмная тема: тёмный градиент для клавиш */
   @media (prefers-color-scheme: dark) {
     kbd {
@@ -330,6 +394,12 @@
       border-bottom-width: 2px;
       color: #d4d4d8;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .gesture {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px dashed #3a3a40;
+      color: #d4d4d8;
     }
   }
 </style>
