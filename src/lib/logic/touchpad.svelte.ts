@@ -15,6 +15,7 @@
 //   превью не успевало обновляться
 // ============================================================================
 
+import { debugLog } from "./debug-log";
 import type { SeekQueue } from "./seek-queue";
 
 export class TouchpadHandler {
@@ -65,6 +66,12 @@ export class TouchpadHandler {
             0,
             Math.min(duration, this.seekQueue.getTargetTime() + seekAmount)
         );
+
+        debugLog.event("wheel", {
+            deltaX: Math.round(e.deltaX * 100) / 100,
+            deltaY: Math.round(e.deltaY * 100) / 100,
+            targetTime: Math.round(targetTime * 1000) / 1000,
+        });
 
         this.seekQueue.request(targetTime);
 

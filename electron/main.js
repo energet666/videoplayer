@@ -8,6 +8,7 @@
 
 import { app, BrowserWindow, ipcMain, screen } from 'electron';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 // __dirname не доступен в ESM-модулях, поэтому вычисляем его вручную
@@ -301,6 +302,35 @@ if (!gotTheLock) {
                 }
             }
         });
+
+        // ====================================================================
+        // Сохранение лога событий плеера (только dev)
+        // ====================================================================
+        // Renderer постоянно держит в памяти последние события (см.
+        // src/lib/logic/debug-log.ts) и присылает их сюда, когда поймано
+        // зависание. В production канал не регистрируется вовсе — писать
+        // файлы по просьбе renderer'а в released-сборке незачем.
+        if (process.env.NODE_ENV === 'development') {
+            ipcMain.handle('write-debug-log', async (event, content) => {
+                if (typeof content !== 'string' || content.length > 16 * 1024 * 1024) {
+                    return null;
+                }
+
+                try {
+                    const dir = path.join(process.cwd(), 'debug-logs');
+                    await fs.promises.mkdir(dir, { recursive: true });
+
+                    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const file = path.join(dir, `player-${stamp}.jsonl`);
+                    await fs.promises.writeFile(file, content, 'utf8');
+
+                    return file;
+                } catch (error) {
+                    console.error('Не удалось сохранить лог событий:', error);
+                    return null;
+                }
+            });
+        }
 
         // Renderer просит скрыть окно (используется при входе в PiP-режим)
         ipcMain.on('hide-window', () => {

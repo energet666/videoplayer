@@ -13,6 +13,8 @@
 // Промежуточные позиции схлопываются — важна только последняя.
 // ============================================================================
 
+import { debugLog } from "./debug-log";
+
 export class SeekQueue {
     // Позиция, которая ждёт своей очереди (null — очередь пуста)
     private pending: number | null = null;
@@ -55,7 +57,10 @@ export class SeekQueue {
         this.target = time;
 
         const videoElement = this.getVideo();
-        if (!videoElement || videoElement.seeking) return;
+        if (!videoElement || videoElement.seeking) {
+            debugLog.event("seek-queued", { time });
+            return;
+        }
 
         this.flush();
     }
@@ -79,8 +84,18 @@ export class SeekQueue {
 
     /** Сброс очереди (например, при уничтожении компонента). */
     reset() {
+        debugLog.event("seek-queue-reset", { pending: this.pending, target: this.target });
         this.pending = null;
         this.target = null;
+    }
+
+    /**
+     * Состояние очереди для отладочного лога (см. debug-log.ts).
+     * Больше ни для чего не нужно: снаружи очередь управляется только
+     * через request()/handleSeeked().
+     */
+    getDebugState() {
+        return { pending: this.pending, target: this.target };
     }
 
     /** Применяет накопленную позицию, если она есть. */
@@ -95,6 +110,7 @@ export class SeekQueue {
 
         const time = this.pending;
         this.pending = null;
+        debugLog.event("seek-apply", { time });
         videoElement.currentTime = time;
     }
 }

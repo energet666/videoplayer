@@ -41,6 +41,12 @@ interface Window {
         /** Подписка на смену полноэкранного режима. Возвращает функцию отписки. */
         onFullscreenChange: (callback: (isFullscreen: boolean) => void) => () => void;
 
+        /**
+         * Сохраняет лог событий плеера в файл и возвращает путь к нему.
+         * Есть только в dev-режиме (см. debug-log.ts), поэтому опционален.
+         */
+        writeDebugLog?: (content: string) => Promise<string | null>;
+
         /** Возвращает текущую платформу (darwin, win32, linux) */
         getPlatform: () => string;
     };

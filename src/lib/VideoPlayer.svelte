@@ -32,6 +32,8 @@
   import { HoldActionRunner } from "./logic/hold-actions";
   import { HoldZoneHandler, type HoldZone } from "./logic/hold-zones.svelte";
   import { SeekQueue } from "./logic/seek-queue";
+  import { PlaybackRecovery } from "./logic/recovery";
+  import { debugLog } from "./logic/debug-log";
 
   // Пропсы: URL видеофайла, передаётся из App.svelte
   let { videoSrc }: { videoSrc: string | null } = $props();
@@ -113,6 +115,11 @@
   // ========================
   let holdZone = $state<HoldZone | null>(null); // Активная зона удержания (null — нет)
 
+  // ========================
+  // Восстановление после сбоя декодера
+  // ========================
+  let isRecovering = $state(false); // Идёт перезагрузка источника после ошибки
+
   /**
    * Показывает контролы и запускает таймер автоскрытия.
    * Вызывается при движении мыши, нажатии клавиш и скролле тачпада.
@@ -136,6 +143,34 @@
   // получает не больше одной перемотки за раз, промежуточные позиции
   // схлопываются, а метка на баре ведётся за целью (см. seek-queue.ts).
   const seekQueue = new SeekQueue(() => videoElement);
+
+  // ========================
+  // Восстановление после сбоя декодера
+  // ========================
+  // Аппаратный декодер (VideoToolbox на macOS) иногда падает при быстрой
+  // перемотке: элемент отдаёт error.code = 3 и навсегда застревает в
+  // seeking = true. Событие 'seeked' после этого не приходит никогда, очередь
+  // перемоток остаётся заблокированной, и вместе с ней умирают все жесты
+  // разом. Лечится только перезагрузкой источника — см. recovery.ts.
+  const recovery = new PlaybackRecovery(() => videoElement, seekQueue, {
+    getPlaybackRate: () => userPlaybackRate,
+    onRecoveryStart: () => {
+      // Жесты и длинные действия могли остаться «зажатыми» на умершем
+      // элементе — сворачиваем их, чтобы после перезагрузки не всплыла
+      // чужая скорость или бесконечный интервал перемотки назад
+      holdActions.stop();
+      isWarpActive = false;
+      holdZone = null;
+      isDragSeeking = false;
+      isTouchpadSeeking = false;
+      isRecovering = true;
+      showControls = true;
+    },
+    onRecoveryEnd: () => {
+      isRecovering = false;
+      handleMouseMove();
+    },
+  });
 
   // ========================
   // Длинные действия (×2, ×16, прыжки назад)
@@ -260,6 +295,11 @@
    * Просит Electron изменить размер окна под размер видео.
    */
   function handleLoadedMetadata() {
+    // Во время восстановления после сбоя декодера метаданные приходят повторно,
+    // на том же самом файле. Ресайзить и центрировать окно ещё раз не нужно —
+    // размер уже подобран, а окно прыгнуло бы на середину экрана.
+    if (recovery.isActive()) return;
+
     if (videoElement) {
       const width = videoElement.videoWidth;
       const height = videoElement.videoHeight;
@@ -464,11 +504,21 @@
 
     // Очередь перемоток: следующая позиция применяется, когда видео отработало
     // предыдущую (см. seek-queue.ts)
-    const onSeeked = () => seekQueue.handleSeeked();
+    const onSeeked = () => {
+      seekQueue.handleSeeked();
+      recovery.handleSeeked();
+    };
+
+    // Сбой декодера и «залипший» seek: и то, и другое лечится перезагрузкой
+    // источника, иначе плеер стоит намертво (см. recovery.ts)
+    const onSeeking = () => recovery.handleSeeking();
+    const onError = () => recovery.handleError();
 
     videoElement.addEventListener("pointerdown", onPointerDown);
     videoElement.addEventListener("lostpointercapture", onInterrupt);
     videoElement.addEventListener("seeked", onSeeked);
+    videoElement.addEventListener("seeking", onSeeking);
+    videoElement.addEventListener("error", onError);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
     window.addEventListener("pointercancel", onPointerCancel);
@@ -478,10 +528,47 @@
       videoElement.removeEventListener("pointerdown", onPointerDown);
       videoElement.removeEventListener("lostpointercapture", onInterrupt);
       videoElement.removeEventListener("seeked", onSeeked);
+      videoElement.removeEventListener("seeking", onSeeking);
+      videoElement.removeEventListener("error", onError);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
       window.removeEventListener("keydown", onKeyDown);
+    };
+  });
+
+  // ========================
+  // Сторож зависаний и отладочный лог
+  // ========================
+  // Сторож ловит перемотку, которая не завершилась (событие 'error' приходит
+  // не всегда — элемент может просто застрять в seeking).
+  // Лог событий пишется только в dev-сборке: в production debugLog выключен
+  // целиком и все вызовы ниже — пустышки (см. debug-log.ts).
+  $effect(() => {
+    if (!videoElement) return;
+
+    recovery.start();
+
+    // Снимок состояния, который лог прикладывает к каждому событию
+    debugLog.setProbe(() => ({
+      currentTime: Math.round(videoElement.currentTime * 1000) / 1000,
+      seeking: videoElement.seeking,
+      paused: videoElement.paused,
+      readyState: videoElement.readyState,
+      networkState: videoElement.networkState,
+      playbackRate: videoElement.playbackRate,
+      userPlaybackRate,
+      queue: seekQueue.getDebugState(),
+      recovering: recovery.isActive(),
+    }));
+
+    const stopWatchingVideo = debugLog.watchVideo(videoElement);
+    const uninstallDebugLog = debugLog.install();
+
+    return () => {
+      recovery.cleanup();
+      stopWatchingVideo();
+      uninstallDebugLog();
     };
   });
 
@@ -511,6 +598,7 @@
     keyboardHandler.cleanup();
     holdZoneHandler.cleanup();
     dragSeekHandler.cleanup();
+    recovery.cleanup();
   });
 </script>
 
@@ -584,6 +672,21 @@
        и кнопка перекрывала бы индикатор перемотки. -->
   {#if paused && !isDragSeeking}
     <PlayOverlay {showControls} />
+  {/if}
+
+  <!-- Восстановление после сбоя декодера: источник перезагружается, позиция
+       возвращается. Обычно занимает доли секунды, но без подписи выглядело бы
+       как случайный рывок видео. -->
+  {#if isRecovering}
+    <div
+      class="absolute inset-0 z-30 flex items-center justify-center pointer-events-none"
+    >
+      <div
+        class="px-3 py-1.5 rounded-lg bg-black/60 text-white text-sm backdrop-blur-sm"
+      >
+        Восстановление…
+      </div>
+    </div>
   {/if}
 
   <!-- Индикатор перемотки перетаскиванием мыши -->

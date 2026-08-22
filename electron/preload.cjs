@@ -53,6 +53,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
         return () => ipcRenderer.removeListener('fullscreen-changed', handler);
     },
 
+    // Сохранение лога событий плеера в файл. Существует только в dev-режиме:
+    // в production соответствующего обработчика в main-процессе нет.
+    ...(process.env.NODE_ENV === 'development'
+        ? { writeDebugLog: (content) => ipcRenderer.invoke('write-debug-log', content) }
+        : {}),
+
     // Возвращает текущую платформу: 'darwin' (macOS), 'win32' (Windows), 'linux'
     // Используется в UI для платформо-зависимых стилей (например, прозрачность фона)
     getPlatform: () => process.platform,
