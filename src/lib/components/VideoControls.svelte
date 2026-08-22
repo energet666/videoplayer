@@ -30,7 +30,8 @@
         speeds, // Доступные значения скорости (общие с клавишами ↑↓)
         onRateChange, // Колбэк: пользователь выбрал скорость в меню
         volume = $bindable(), // Громкость (двусторонняя привязка к видео)
-        isDragging = $bindable(), // Флаг перетаскивания прогресс-бара
+        onScrubStart, // Колбэк: ползунок захвачен (панель не должна прятаться)
+        onScrubEnd, // Колбэк: ползунок отпущен
         paused, // Видео на паузе?
         onPipToggle, // Колбэк: переключить PiP-режим
         onFullscreenToggle, // Колбэк: переключить полноэкранный режим окна
@@ -47,7 +48,8 @@
         speeds: number[];
         onRateChange: (rate: number) => void;
         volume: number;
-        isDragging: boolean;
+        onScrubStart: () => void;
+        onScrubEnd: () => void;
         paused: boolean;
         onPipToggle: () => void;
         onFullscreenToggle: () => void;
@@ -142,7 +144,8 @@
             <!--
               Скрытый <input type="range"> поверх визуального бара.
               Полностью прозрачный (opacity-0), но перехватывает все события мыши.
-              При mousedown/mouseup — переключаем isDragging.
+              При mousedown/mouseup — сообщаем плееру, что ползунок захвачен:
+              пока его тянут, панель не должна прятаться.
             -->
             <input
                 type="range"
@@ -151,8 +154,8 @@
                 step="0.1"
                 value={displayTime}
                 oninput={handleSeek}
-                onmousedown={() => (isDragging = true)}
-                onmouseup={() => (isDragging = false)}
+                onmousedown={onScrubStart}
+                onmouseup={onScrubEnd}
                 class="absolute w-full h-full opacity-0 cursor-pointer z-10"
             />
             <!-- Фон трека (серая полоска) -->

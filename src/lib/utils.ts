@@ -15,3 +15,15 @@ export function formatTime(seconds: number) {
     const s = Math.floor(seconds % 60);              // Секунды
     return `${m}:${s.toString().padStart(2, "0")}`;  // Дополняем секунды до 2 цифр
 }
+
+/**
+ * Ограничивает время рамками файла: не раньше нуля, не позже длительности.
+ * Нужна каждому жесту перемотки перед тем, как отдать позицию в очередь.
+ *
+ * @param seconds — желаемая позиция (может выйти за границы)
+ * @param duration — длительность видео
+ * @returns — позиция внутри [0, duration]
+ */
+export function clampTime(seconds: number, duration: number) {
+    return Math.max(0, Math.min(duration, seconds));
+}

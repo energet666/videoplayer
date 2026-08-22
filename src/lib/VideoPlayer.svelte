@@ -2,39 +2,48 @@
   ============================================================================
   VideoPlayer.svelte — Основной компонент видеоплеера
   ============================================================================
-  Отвечает за:
-  1. Отображение HTML5 <video> элемента
-  2. Управление состоянием воспроизведения (пауза, громкость, время, скорость)
-  3. Показ/скрытие контролов (с автоскрытием через 1 секунду)
-  4. Обработку клавиатурных сочетаний (через KeyboardHandler)
-  5. Обработку жестов тачпада (через TouchpadHandler), перемотку
-     перетаскиванием мыши (через DragSeekHandler) и удержание левой кнопки
-     по трём зонам кадра (через HoldZoneHandler)
-  6. Авто-ресайз окна Electron под размер видео
-  7. Режим PiP (Picture-in-Picture)
+  Сам по себе ничего не решает: держит <video>, состояние воспроизведения и
+  собирает вместе обработчики из logic/, связывая их с UI.
+
+  Что здесь живёт:
+  1. Элемент <video> и его состояние (пауза, громкость, время, скорость)
+  2. displayTime — позиция для отрисовки, снимается по кадрам, а не по
+     редкому timeupdate
+  3. Сборка обработчиков ввода и колбэки от них в состояние UI
+  4. Авто-ресайз окна Electron, PiP и синхронизация fullscreen с main
+
+  Что вынесено (каждый файл — со своими инвариантами в шапке):
+    seek-queue        — единственное место, которое двигает currentTime
+    keyboard          — клавиатура, короткие и длинные нажатия
+    touchpad          — свайп по тачпаду
+    drag-seek         — перемотка перетаскиванием
+    hold-zones        — удержание левой кнопки по трём зонам кадра
+    click-seek        — клики: пауза и перемотка по половинам кадра
+    pointer-router    — арбитраж левой кнопки между этими тремя жестами
+    hold-actions      — сами длинные действия (×2, ×16, прыжки назад)
+    seek-indicator    — цифры индикатора перемотки, общего для всех жестов
+    controls-visibility — показ и автоскрытие панели
+    recovery          — восстановление после сбоя декодера
   ============================================================================
 -->
-
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onDestroy } from "svelte";
   import PlayOverlay from "./components/PlayOverlay.svelte";
   import SpeedIndicator from "./components/SpeedIndicator.svelte";
   import VideoControls from "./components/VideoControls.svelte";
   import WarpEffect from "./components/WarpEffect.svelte";
   import DragSeekIndicator from "./components/DragSeekIndicator.svelte";
-  import {
-    togglePlay,
-    togglePip,
-  } from "./logic/video-actions";
+  import { togglePip } from "./logic/video-actions";
   import { KeyboardHandler, availableSpeeds } from "./logic/keyboard.svelte";
-  import {
-    TouchpadHandler,
-    TOUCHPAD_GESTURE_GAP_MS,
-  } from "./logic/touchpad.svelte";
+  import { TouchpadHandler } from "./logic/touchpad.svelte";
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
-  import { HoldActionRunner, type HoldAction } from "./logic/hold-actions";
+  import { HoldActionRunner } from "./logic/hold-actions";
   import { HoldZoneHandler, type HoldZone } from "./logic/hold-zones.svelte";
   import { SeekQueue } from "./logic/seek-queue.svelte";
+  import { SeekIndicator } from "./logic/seek-indicator.svelte";
+  import { ClickSeekHandler } from "./logic/click-seek";
+  import { PointerRouter } from "./logic/pointer-router";
+  import { ControlsVisibility } from "./logic/controls-visibility.svelte";
   import { PlaybackRecovery } from "./logic/recovery";
   import { debugLog } from "./logic/debug-log";
 
@@ -67,12 +76,11 @@
   let userPlaybackRate = $state(1.0);
 
   // ========================
-  // Состояние UI
+  // Панель управления
   // ========================
-  let showControls = $state(false); // Показывать ли панель управления?
-  let isDragging = $state(false); // Пользователь перетаскивает прогресс-бар?
-  let isMouseOverControls = $state(false); // Курсор над контролами? (предотвращает автоскрытие)
-  let controlsTimeout: ReturnType<typeof setTimeout>; // Таймер автоскрытия контролов
+  // Показ, автоскрытие через секунду и закрепление на время жеста —
+  // см. controls-visibility.svelte.ts.
+  const controls = new ControlsVisibility();
 
   // ========================
   // Индикатор скорости
@@ -96,35 +104,13 @@
   // Warp-эффект (ускорение ×16)
   // ========================
   let isWarpActive = $state(false); // Показывать ли warp-эффект?
-  let clickTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер различения single/double click
-  // Перемотка двойным кликом показывается тем же индикатором, что и жесты.
-  // Сторона и накопленный шаг обычными переменными: на экран они попадают
-  // через seekIndicator*, отдельная реактивность им не нужна.
-  let isClickSeeking = $state(false); // Показывать индикатор после клика-перемотки?
-  let seekFeedbackSide: "left" | "right" | null = null; // Сторона последней перемотки
-  let seekFeedbackAmount = 10; // Накопленный шаг для отображения (10, 20, 30...)
-  let seekFeedbackTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер скрытия индикатора
-  let lastSeekFeedbackAt = 0; // Время последнего шага перемотки для накопления
-  const SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS = 600;
-  const SEEK_FEEDBACK_VISIBLE_MS = 700; // Сколько индикатор висит после клика
 
   // ========================
-  // Перемотка перетаскиванием мыши
+  // Индикатор перемотки
   // ========================
-  let isDragSeeking = $state(false); // Идёт ли перемотка перетаскиванием?
-  let isTouchpadSeeking = $state(false); // Идёт ли перемотка свайпом по тачпаду?
-  let touchpadSeekTimeout: ReturnType<typeof setTimeout>; // Таймер затухания свайпа
-  // Индикатор перемотки общий для всех жестов — каждый пишет сюда свои цифры.
-  // Значения намеренно не сбрасываются на конце жеста: индикатор гаснет
-  // плавно (150мс), и за это время подстановка чужих или нулевых цифр была бы
-  // видна как мигание другого значения.
-  let seekIndicatorDelta = $state(0); // Смещение от точки начала жеста (секунды)
-  let seekIndicatorTarget = $state(0); // Время, к которому перематываем
-
-  // Удержание, которое считается перемоткой: ← / → и крайние зоны кадра.
-  // boost (×2 на пробеле и в центре) сюда не попадает — это не перемотка.
-  let holdSeekAction = $state<HoldAction | null>(null);
-  let holdSeekStart = $state(0); // Позиция видео в момент начала удержания
+  // Один на все жесты: драг мышью, свайп, двойной клик и удержание ←/→.
+  // Кто и какие цифры туда пишет — см. seek-indicator.svelte.ts.
+  const seekIndicator = new SeekIndicator();
 
   // ========================
   // Удержание левой кнопки по зонам кадра
@@ -135,22 +121,6 @@
   // Восстановление после сбоя декодера
   // ========================
   let isRecovering = $state(false); // Идёт перезагрузка источника после ошибки
-
-  /**
-   * Показывает контролы и запускает таймер автоскрытия.
-   * Вызывается при движении мыши, нажатии клавиш и скролле тачпада.
-   * Если пользователь перетаскивает прогресс-бар или курсор над контролами —
-   * автоскрытие отключается.
-   */
-  function handleMouseMove() {
-    showControls = true;
-    clearTimeout(controlsTimeout);
-    if (!isDragging && !isMouseOverControls) {
-      controlsTimeout = setTimeout(() => {
-        showControls = false;
-      }, 1000); // Прятать контролы через 1 секунду бездействия
-    }
-  }
 
   // ========================
   // Очередь перемоток
@@ -177,15 +147,13 @@
       holdActions.stop();
       isWarpActive = false;
       holdZone = null;
-      holdSeekAction = null;
-      isDragSeeking = false;
-      isTouchpadSeeking = false;
+      seekIndicator.reset();
       isRecovering = true;
-      showControls = true;
+      controls.show();
     },
     onRecoveryEnd: () => {
       isRecovering = false;
-      handleMouseMove();
+      controls.keepAlive();
     },
   });
 
@@ -209,25 +177,16 @@
     // удержания: displayTime уже ведётся за целью очереди каждый кадр.
     onActionStart: (action) => {
       if (action === "boost") return;
-      holdSeekStart = seekQueue.getTargetTime();
-      holdSeekAction = action;
-      // Первые цифры выставляем сразу: эффект ниже отработает только после
-      // отрисовки, и на кадре появления индикатор показал бы значения от
-      // прошлого жеста
-      seekIndicatorDelta = 0;
-      seekIndicatorTarget = holdSeekStart;
+      seekIndicator.holdStarted(seekQueue.getTargetTime());
       // Держим контролы на экране: при удержании клавиши мышь не двигается,
       // и панель (а под ней и прогресс-бар) спряталась бы посреди перемотки.
       // Зоны кадра делают то же самое в onHoldStart.
-      isDragging = true;
-      showControls = true;
-      clearTimeout(controlsTimeout);
+      controls.pin();
     },
     onActionEnd: (action) => {
-      holdSeekAction = null;
+      seekIndicator.holdEnded();
       if (action === "boost") return;
-      isDragging = false;
-      handleMouseMove(); // Запускаем автоскрытие контролов заново
+      controls.unpin(); // Панель снова прячется сама
     },
   });
 
@@ -247,7 +206,7 @@
         userPlaybackRate = rate;
       },
       getDuration: () => duration,
-      onShowControls: handleMouseMove,
+      onShowControls: () => controls.keepAlive(),
       onShowSpeedIndicator: flashSpeedIndicator,
     },
   );
@@ -281,17 +240,11 @@
   // TouchpadHandler обрабатывает горизонтальный scroll тачпада для перемотки видео.
   const touchpadHandler = new TouchpadHandler(() => videoElement, seekQueue, {
     getDuration: () => duration,
-    onShowControls: handleMouseMove,
+    onShowControls: () => controls.keepAlive(),
     // У свайпа нет явного конца — считаем жест законченным, если события
     // wheel перестали приходить (инерция затухает сама)
     onSeekUpdate: (deltaSeconds: number, targetTime: number) => {
-      isTouchpadSeeking = true;
-      seekIndicatorDelta = deltaSeconds;
-      seekIndicatorTarget = targetTime;
-      clearTimeout(touchpadSeekTimeout);
-      touchpadSeekTimeout = setTimeout(() => {
-        isTouchpadSeeking = false;
-      }, TOUCHPAD_GESTURE_GAP_MS);
+      seekIndicator.touchpadMoved(deltaSeconds, targetTime);
     },
   });
 
@@ -301,18 +254,15 @@
   // DragSeekHandler перематывает видео перетаскиванием мыши в любом месте кадра.
   const dragSeekHandler = new DragSeekHandler(() => videoElement, seekQueue, {
     getDuration: () => duration,
-    onShowControls: handleMouseMove,
+    onShowControls: () => controls.keepAlive(),
     onSeekStart: () => {
       // Отменяем отложенный play/pause: жест оказался перемоткой, а не кликом
-      clearTimeout(clickTimeout);
-      isDragSeeking = true;
-      isDragging = true; // Держим контролы на экране, пока идёт жест
-      showControls = true;
-      clearTimeout(controlsTimeout);
+      clickSeekHandler.cancelPendingToggle();
+      seekIndicator.dragStarted();
+      controls.pin(); // Держим контролы на экране, пока идёт жест
     },
     onSeekUpdate: (deltaSeconds: number, targetTime: number) => {
-      seekIndicatorDelta = deltaSeconds;
-      seekIndicatorTarget = targetTime;
+      seekIndicator.dragMoved(deltaSeconds, targetTime);
     },
     onSeekEnd: () => {
       // Забираем актуальное состояние прямо у элемента: play() снимает паузу
@@ -320,9 +270,8 @@
       // Без этого между концом жеста и событием успевала мигнуть большая
       // кнопка Play в центре кадра.
       if (videoElement) paused = videoElement.paused;
-      isDragSeeking = false;
-      isDragging = false;
-      handleMouseMove(); // Запускаем автоскрытие контролов заново
+      seekIndicator.dragEnded();
+      controls.unpin(); // Панель снова прячется сама
     },
   });
 
@@ -336,21 +285,16 @@
     onHoldStart: (zone) => {
       // Отменяем отложенный play/pause от предыдущего клика: серия
       // "клик + удержание" не должна закончиться паузой
-      clearTimeout(clickTimeout);
+      clickSeekHandler.cancelPendingToggle();
       holdZone = zone;
       // При перемотке (крайние зоны) держим контролы на экране: мышь не
       // двигается, и без этого прогресс-бар спрятался бы через секунду.
       // В центре — ускорение ×2, там контролы не нужны (как с пробелом).
-      if (zone !== "center") {
-        isDragging = true;
-        showControls = true;
-        clearTimeout(controlsTimeout);
-      }
+      if (zone !== "center") controls.pin();
     },
     onHoldEnd: () => {
       holdZone = null;
-      isDragging = false;
-      handleMouseMove(); // Запускаем автоскрытие контролов заново
+      controls.unpin(); // Панель снова прячется сама
     },
   });
 
@@ -382,82 +326,31 @@
    */
   function onEnd() {
     paused = true;
-    showControls = true;
+    controls.show();
   }
 
-  /**
-   * Перемотка по двойному клику:
-   * левая половина — назад на 10 секунд, правая — вперед на 10 секунд.
-   */
-  function handleSeekBySide(event: MouseEvent) {
-    if (!videoElement || !videoContainer) return;
+  // ========================
+  // Арбитраж левой кнопки мыши
+  // ========================
+  // Удержание по зонам и перемотка перетаскиванием слушают одно и то же
+  // нажатие и расходятся по времени и расстоянию. Кто кого перебивает —
+  // записано в pointer-router.ts, здесь только подписка на события.
+  const pointerRouter = new PointerRouter(holdZoneHandler, dragSeekHandler);
 
-    const now = Date.now();
-    const rect = videoContainer.getBoundingClientRect();
-    const isLeftHalf = event.clientX < rect.left + rect.width / 2;
-    const side: "left" | "right" = isLeftHalf ? "left" : "right";
-    const seekDelta = isLeftHalf ? -10 : 10;
-    // Считаем от цели очереди, а не от currentTime: серия двойных кликов подряд
-    // накапливает шаг (10, 20, 30 секунд), а видео за ней ещё не доехало
-    const nextTime = Math.min(
-      duration || videoElement.duration || 0,
-      Math.max(0, seekQueue.getTargetTime() + seekDelta),
-    );
-
-    seekQueue.request(nextTime);
-    const shouldAccumulate =
-      seekFeedbackSide === side &&
-      now - lastSeekFeedbackAt <= SEEK_FEEDBACK_ACCUMULATION_WINDOW_MS;
-
-    seekFeedbackAmount = shouldAccumulate ? seekFeedbackAmount + 10 : 10;
-    seekFeedbackSide = side;
-    lastSeekFeedbackAt = now;
-
-    // В индикаторе показываем накопленный шаг серии (−10, −20, −30…) и время,
-    // к которому ведём. Цифры пишем сразу, до показа: значения от прошлого
-    // жеста иначе мелькнули бы на кадре появления.
-    seekIndicatorDelta = isLeftHalf ? -seekFeedbackAmount : seekFeedbackAmount;
-    seekIndicatorTarget = nextTime;
-    isClickSeeking = true;
-
-    clearTimeout(seekFeedbackTimeout);
-    seekFeedbackTimeout = setTimeout(() => {
-      isClickSeeking = false;
-      seekFeedbackSide = null;
-      seekFeedbackAmount = 10;
-    }, SEEK_FEEDBACK_VISIBLE_MS);
-    handleMouseMove();
-  }
-
-  /**
-   * YouTube-подобная схема кликов:
-   * - single click => play/pause (с задержкой, чтобы не конфликтовал с double click)
-   * - 2/4/6... click в серии => перемотка ±10 секунд
-   */
-  function handleVideoClick(event: MouseEvent) {
-    if (!videoElement) return;
-
-    // Click после перемотки перетаскиванием или удержания зоны игнорируем,
-    // иначе каждый жест заканчивался бы паузой.
-    // Спрашиваем оба обработчика: флаг у каждого свой и одноразовый.
-    const suppressedByHold = holdZoneHandler.shouldSuppressClick();
-    const suppressedByDrag = dragSeekHandler.shouldSuppressClick();
-    if (suppressedByHold || suppressedByDrag) return;
-
-    const clickCountInSeries = event.detail;
-    clearTimeout(clickTimeout);
-
-    if (clickCountInSeries === 1) {
-      clickTimeout = setTimeout(() => {
-        togglePlay(videoElement);
-      }, 220);
-      return;
-    }
-
-    if (clickCountInSeries % 2 === 0) {
-      handleSeekBySide(event);
-    }
-  }
+  // ========================
+  // Инициализация обработчика кликов по кадру
+  // ========================
+  // ClickSeekHandler различает одиночный клик (пауза) и чётные клики серии
+  // (перемотка ±10 с по половине кадра) — см. click-seek.ts.
+  const clickSeekHandler = new ClickSeekHandler(() => videoElement, seekQueue, {
+    getBounds: () => videoContainer?.getBoundingClientRect(),
+    getDuration: () => duration,
+    // Click после перемотки перетаскиванием или удержания зоны нужно
+    // проглотить, иначе каждый жест заканчивался бы паузой
+    shouldSuppressClick: () => pointerRouter.shouldSuppressClick(),
+    onShowControls: () => controls.keepAlive(),
+    onSeek: (side, targetTime) => seekIndicator.clickSeeked(side, targetTime),
+  });
 
   // ========================
   // Отслеживание PiP-режима
@@ -505,22 +398,16 @@
   });
 
   // ========================
-  // Индикатор перемотки: один на все жесты
+  // Индикатор перемотки: цифры удержания
   // ========================
-  // Драг и свайп сообщают смещение сами, у удержания его считаем от стартовой
-  // позиции по displayTime (он идёт за целью очереди — и на прыжках назад,
-  // и на ×16, где время двигает само воспроизведение).
-  let seekIndicatorActive = $derived(
-    isDragSeeking || isTouchpadSeeking || isClickSeeking || holdSeekAction !== null,
-  );
-
-  // У удержания своего «шага» нет — цифры ведём по displayTime, пока действие
-  // живо. Как только оно закончилось, эффект перестаёт писать, и на экране
-  // замирает последнее значение до конца затухания.
+  // Драг, свайп и клик сообщают смещение сами. У удержания (←/→ и крайние
+  // зоны) своего «шага» нет — ведём цифры по displayTime, пока действие живо:
+  // он идёт за целью очереди и на прыжках назад, и на ×16, где время двигает
+  // само воспроизведение. Как только удержание закончилось, эффект перестаёт
+  // писать, и на экране замирает последнее значение до конца затухания.
   $effect(() => {
-    if (holdSeekAction === null) return;
-    seekIndicatorDelta = displayTime - holdSeekStart;
-    seekIndicatorTarget = displayTime;
+    if (!seekIndicator.isHolding) return;
+    seekIndicator.trackHold(displayTime);
   });
 
   // ========================
@@ -533,9 +420,9 @@
   $effect(() => {
     if (
       paused &&
-      !isDragSeeking &&
-      !isTouchpadSeeking &&
-      !isDragging &&
+      !seekIndicator.isDragSeeking &&
+      !seekIndicator.isTouchpadSeeking &&
+      !controls.isPinned &&
       !holdZone
     ) {
       // На паузе позицию двигает только timeupdate, а он приходит уже после
@@ -573,35 +460,15 @@
   $effect(() => {
     if (!videoElement) return;
 
-    // Левая кнопка одна на два жеста: удержание по зонам и перемотка
-    // перетаскиванием. Оба слушают нажатие, а дальше расходятся по времени и
-    // расстоянию — ушёл дальше 6px раньше 200мс — драг, продержал 200мс — зона.
-    const onPointerDown = (e: PointerEvent) => {
-      holdZoneHandler.handlePointerDown(e);
-      dragSeekHandler.handlePointerDown(e);
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      holdZoneHandler.handlePointerMove(e);
-      // Удержание уже началось — движение мыши не должно превращаться в
-      // перемотку перетаскиванием
-      if (holdZoneHandler.isActive()) return;
-      dragSeekHandler.handlePointerMove(e);
-    };
-    const onPointerUp = (e: PointerEvent) => {
-      holdZoneHandler.handlePointerUp(e);
-      dragSeekHandler.handlePointerUp(e);
-    };
-    const onPointerCancel = (e: PointerEvent) => {
-      holdZoneHandler.handlePointerCancel(e);
-      dragSeekHandler.handlePointerCancel(e);
-    };
-    const onKeyDown = (e: KeyboardEvent) => dragSeekHandler.handleKeyDown(e);
+    const onPointerDown = (e: PointerEvent) => pointerRouter.handlePointerDown(e);
+    const onPointerMove = (e: PointerEvent) => pointerRouter.handlePointerMove(e);
+    const onPointerUp = (e: PointerEvent) => pointerRouter.handlePointerUp(e);
+    const onPointerCancel = (e: PointerEvent) =>
+      pointerRouter.handlePointerCancel(e);
+    const onKeyDown = (e: KeyboardEvent) => pointerRouter.handleKeyDown(e);
     // Захват указателя потерян (окно ушло из фокуса, система забрала жест) —
     // завершаем жест, иначе он "залипнет" до следующего pointerdown
-    const onInterrupt = () => {
-      holdZoneHandler.handleInterrupt();
-      dragSeekHandler.handleInterrupt();
-    };
+    const onInterrupt = () => pointerRouter.handleInterrupt();
 
     // Очередь перемоток: следующая позиция применяется, когда видео отработало
     // предыдущую (см. seek-queue.ts)
@@ -691,14 +558,12 @@
 
   // Очистка таймеров и обработчиков при уничтожении компонента
   onDestroy(() => {
-    clearTimeout(controlsTimeout);
     clearTimeout(speedIndicatorTimeout);
-    clearTimeout(clickTimeout);
-    clearTimeout(seekFeedbackTimeout);
-    clearTimeout(touchpadSeekTimeout);
+    controls.cleanup();
     keyboardHandler.cleanup();
-    holdZoneHandler.cleanup();
-    dragSeekHandler.cleanup();
+    pointerRouter.cleanup();
+    clickSeekHandler.cleanup();
+    seekIndicator.cleanup();
     recovery.cleanup();
   });
 </script>
@@ -711,8 +576,7 @@
     // Окно ушло из фокуса: keyup и pointerup до нас не дойдут — сбрасываем
     // зажатые клавиши и текущий жест перемотки вручную
     keyboardHandler.handleWindowBlur();
-    holdZoneHandler.handleInterrupt();
-    dragSeekHandler.handleInterrupt();
+    pointerRouter.handleInterrupt();
   }}
 />
 
@@ -726,13 +590,11 @@
 <div
   bind:this={videoContainer}
   class="relative w-full h-full bg-black group overflow-hidden"
-  class:cursor-none={!showControls}
-  class:cursor-ew-resize={isDragSeeking}
+  class:cursor-none={!controls.isVisible}
+  class:cursor-ew-resize={seekIndicator.isDragSeeking}
   role="application"
-  onmousemove={handleMouseMove}
-  onmouseleave={() => {
-    showControls = false;
-  }}
+  onmousemove={() => controls.keepAlive()}
+  onmouseleave={() => controls.hide()}
 >
   <!-- HTML5 Video элемент -->
   <!-- svelte-ignore a11y_media_has_caption -->
@@ -746,15 +608,15 @@
     bind:volume
     onloadedmetadata={handleLoadedMetadata}
     onended={onEnd}
-    onclick={handleVideoClick}
+    onclick={(e) => clickSeekHandler.handleClick(e)}
     autoplay
   ></video>
 
   <!-- Большая кнопка Play по центру экрана (показывается только на паузе).
        Во время перемотки (мышью или свайпом) прячем: пауза там техническая,
        и кнопка перекрывала бы индикатор перемотки. -->
-  {#if paused && !isDragSeeking && !isTouchpadSeeking}
-    <PlayOverlay {showControls} />
+  {#if paused && !seekIndicator.isDragSeeking && !seekIndicator.isTouchpadSeeking}
+    <PlayOverlay showControls={controls.isVisible} />
   {/if}
 
   <!-- Восстановление после сбоя декодера: источник перезагружается, позиция
@@ -775,9 +637,9 @@
   <!-- Индикатор перемотки: драг мышью, свайп по тачпаду, удержание ←/→ и
        перемотка двойным кликом -->
   <DragSeekIndicator
-    isActive={seekIndicatorActive}
-    deltaSeconds={seekIndicatorDelta}
-    targetTime={seekIndicatorTarget}
+    isActive={seekIndicator.isActive}
+    deltaSeconds={seekIndicator.delta}
+    targetTime={seekIndicator.target}
   />
 
   <!-- Warp-эффект при ускорении ×16 (зажатая стрелка вправо) -->
@@ -788,7 +650,7 @@
 
   <!-- Нижняя панель управления (прогресс-бар, громкость, PiP-кнопка) -->
   <VideoControls
-    {showControls}
+    showControls={controls.isVisible}
     {displayTime}
     onSeek={(time) => seekQueue.request(time)}
     {duration}
@@ -796,19 +658,14 @@
     speeds={availableSpeeds}
     onRateChange={handleRateChange}
     bind:volume
-    bind:isDragging
+    onScrubStart={() => controls.pin()}
+    onScrubEnd={() => controls.unpin()}
     {paused}
     onPipToggle={() => togglePip(videoElement)}
     onFullscreenToggle={() => window.electronAPI?.toggleFullscreen()}
     onClose={() => window.electronAPI?.closeWindow()}
     {isFullscreen}
-    onHoverStart={() => {
-      isMouseOverControls = true;
-      clearTimeout(controlsTimeout); // Не прячем контролы, пока курсор над ними
-    }}
-    onHoverEnd={() => {
-      isMouseOverControls = false;
-      handleMouseMove(); // Запускаем таймер автоскрытия заново
-    }}
+    onHoverStart={() => controls.hoverStart()}
+    onHoverEnd={() => controls.hoverEnd()}
   />
 </div>

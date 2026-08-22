@@ -21,15 +21,17 @@
 
 import { debugLog } from "./debug-log";
 import type { SeekQueue } from "./seek-queue.svelte";
+import { SEEK_SECONDS_PER_PIXEL } from "./constants";
+import { clampTime } from "../utils";
 
 // Пауза в wheel-событиях, после которой свайп считается законченным.
-// То же значение гасит индикатор перемотки в VideoPlayer.svelte.
+// То же значение гасит индикатор перемотки (см. seek-indicator.svelte.ts).
 export const TOUCHPAD_GESTURE_GAP_MS = 300;
 
 export class TouchpadHandler {
-    // Коэффициент чувствительности: сколько секунд перемотки на 1 пиксель deltaX.
-    // При sensitivity = 0.05: свайп на 100px = перемотка на 5 секунд.
-    private sensitivity = 0.05;
+    // Коэффициент чувствительности: сколько секунд перемотки на 1 пиксель
+    // deltaX. Общий с перемоткой мышью: свайп на 100px = перемотка на 5 секунд.
+    private sensitivity = SEEK_SECONDS_PER_PIXEL;
 
     // ========================
     // Состояние текущего свайпа (нужно индикатору перемотки)
@@ -85,9 +87,9 @@ export class TouchpadHandler {
         // Шаг относительный, поэтому прибавляем к цели очереди, а не к
         // currentTime: тот ещё не догнал очередь, и накопление шагов терялось бы
         const duration = this.context.getDuration() || videoElement.duration || 0;
-        const targetTime = Math.max(
-            0,
-            Math.min(duration, this.seekQueue.getTargetTime() + seekAmount)
+        const targetTime = clampTime(
+            this.seekQueue.getTargetTime() + seekAmount,
+            duration
         );
 
         debugLog.event("wheel", {

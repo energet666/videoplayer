@@ -21,14 +21,15 @@
 
 import { safePlay } from "./video-actions";
 import type { SeekQueue } from "./seek-queue.svelte";
+import { GESTURE_MOVE_THRESHOLD_PX, SEEK_SECONDS_PER_PIXEL } from "./constants";
+import { clampTime } from "../utils";
 
 export class DragSeekHandler {
-    // Сколько секунд перемотки даёт 1 пиксель движения мыши.
-    // 0.05 → 100px = 5 секунд (тот же коэффициент, что у тачпада).
-    private readonly sensitivity = 0.05;
+    // Сколько секунд перемотки даёт 1 пиксель движения мыши (общее с тачпадом).
+    private readonly sensitivity = SEEK_SECONDS_PER_PIXEL;
 
     // Порог в пикселях: до него жест считается кликом, а не перемоткой.
-    private readonly threshold = 6;
+    private readonly threshold = GESTURE_MOVE_THRESHOLD_PX;
 
     // ========================
     // Состояние жеста
@@ -132,9 +133,9 @@ export class DragSeekHandler {
         }
 
         const duration = this.context.getDuration() || videoElement.duration || 0;
-        this.targetTime = Math.max(
-            0,
-            Math.min(duration, this.startTime + (e.clientX - this.startX) * this.sensitivity)
+        this.targetTime = clampTime(
+            this.startTime + (e.clientX - this.startX) * this.sensitivity,
+            duration,
         );
 
         this.seekQueue.request(this.targetTime);

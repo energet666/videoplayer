@@ -29,6 +29,8 @@
 import { togglePlay } from "./video-actions";
 import type { SeekQueue } from "./seek-queue.svelte";
 import type { HoldActionRunner } from "./hold-actions";
+import { HOLD_DELAY_MS } from "./constants";
+import { clampTime } from "../utils";
 
 // Доступные скорости воспроизведения (переключаются стрелками ↑↓)
 export const availableSpeeds = [1.0, 1.25, 1.5, 2.0];
@@ -98,11 +100,11 @@ export class KeyboardHandler {
             this.isSpaceDown = true;
             this.isSpaceLongPress = false;
 
-            // Через 200мс считаем это длинным нажатием → ускоряем до ×2
+            // Продержали HOLD_DELAY_MS — это длинное нажатие → ускоряем до ×2
             this.spaceTimer = setTimeout(() => {
                 this.isSpaceLongPress = true;
                 this.holdActions.start("boost");
-            }, 200);
+            }, HOLD_DELAY_MS);
             return;
         }
 
@@ -147,13 +149,13 @@ export class KeyboardHandler {
 
                 const isRight = e.code === "ArrowRight";
 
-                // Через 200мс считаем длинным нажатием → быстрая перемотка
+                // Продержали HOLD_DELAY_MS — длинное нажатие → быстрая перемотка
                 this.arrowTimer = setTimeout(() => {
                     this.isArrowLongPress = true;
                     this.context.onShowControls(); // Показываем контролы при перемотке
                     // → : ускорение ×16, ← : прыжки назад по 1 секунде
                     this.holdActions.start(isRight ? "forward" : "rewind");
-                }, 200);
+                }, HOLD_DELAY_MS);
             }
         }
     }
@@ -202,10 +204,7 @@ export class KeyboardHandler {
                     const duration = this.context.getDuration();
 
                     this.seekQueue.request(
-                        Math.max(
-                            0,
-                            Math.min(duration, this.seekQueue.getTargetTime() + step),
-                        ),
+                        clampTime(this.seekQueue.getTargetTime() + step, duration),
                     );
                 }
             } else {

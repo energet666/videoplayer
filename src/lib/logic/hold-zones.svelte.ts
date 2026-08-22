@@ -18,13 +18,14 @@
 //     перемотка перетаскиванием (drag-seek.svelte.ts) — порог тот же, что у
 //     неё, поэтому дрожание руки не превращает драг в удержание и наоборот;
 //   - после сработавшего удержания перемотка перетаскиванием уже не начнётся
-//     (VideoPlayer не пускает в неё move-события, пока isActive()).
+//     (pointer-router.ts не пускает в неё move-события, пока isActive()).
 //
 // click браузер присылает после pointerup всегда, поэтому после удержания его
 // нужно погасить — иначе каждое удержание заканчивалось бы паузой.
 // ============================================================================
 
 import type { HoldAction, HoldActionRunner } from "./hold-actions";
+import { GESTURE_MOVE_THRESHOLD_PX, HOLD_DELAY_MS } from "./constants";
 
 export type HoldZone = "left" | "center" | "right";
 
@@ -36,13 +37,13 @@ const ZONE_ACTIONS: Record<HoldZone, HoldAction> = {
 };
 
 export class HoldZoneHandler {
-    // Сколько держать кнопку, чтобы это перестало быть кликом.
-    // Столько же ждёт клавиатура (см. keyboard.svelte.ts).
-    private readonly holdDelay = 200;
+    // Сколько держать кнопку, чтобы это перестало быть кликом
+    // (столько же ждёт клавиатура — см. constants.ts).
+    private readonly holdDelay = HOLD_DELAY_MS;
 
-    // Порог в пикселях, после которого жест уходит перемотке перетаскиванием.
-    // Совпадает с порогом в drag-seek.svelte.ts.
-    private readonly moveThreshold = 6;
+    // Порог в пикселях, после которого жест уходит перемотке перетаскиванием
+    // (то же число, что в drag-seek.svelte.ts — см. constants.ts).
+    private readonly moveThreshold = GESTURE_MOVE_THRESHOLD_PX;
 
     // ========================
     // Состояние жеста
