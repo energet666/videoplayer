@@ -175,7 +175,7 @@ export class KeyboardHandler {
             clearTimeout(this.spaceTimer);
 
             if (this.isSpaceLongPress) {
-                // Было длинное нажатие — возвращаем скорость и гасим warp-эффект
+                // Было длинное нажатие — возвращаем скорость
                 this.holdActions.stop();
             } else {
                 // Было короткое нажатие — переключаем паузу
@@ -210,6 +210,7 @@ export class KeyboardHandler {
                 }
             } else {
                 // Длинное нажатие закончилось — возвращаем нормальную скорость
+                // и гасим warp-эффект (если это была →)
                 this.holdActions.stop();
                 this.context.onShowControls();
             }

@@ -88,7 +88,7 @@
   let isFullscreen = $state(false);
 
   // ========================
-  // Warp-эффект (ускорение ×2)
+  // Warp-эффект (ускорение ×16)
   // ========================
   let isWarpActive = $state(false); // Показывать ли warp-эффект?
   let clickTimeout: ReturnType<typeof setTimeout> | undefined; // Таймер различения single/double click
@@ -145,7 +145,7 @@
   // всегда возвращается к пользовательской (см. hold-actions.ts).
   const holdActions = new HoldActionRunner(() => videoElement, seekQueue, {
     getPlaybackRate: () => userPlaybackRate,
-    // Warp-эффект при ускорении ×2 (зажатый пробел / центр кадра)
+    // Warp-эффект при ускорении ×16 (зажатая → / правая треть кадра)
     onWarpStart: () => {
       isWarpActive = true;
     },
@@ -593,7 +593,7 @@
     targetTime={dragSeekTarget}
   />
 
-  <!-- Warp-эффект при ускорении ×2 (зажатый пробел) -->
+  <!-- Warp-эффект при ускорении ×16 (зажатая стрелка вправо) -->
   <WarpEffect isActive={isWarpActive} />
 
   <!-- Индикатор скорости воспроизведения (верхний правый угол, например "1.5x") -->

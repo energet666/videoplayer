@@ -5,10 +5,13 @@
 //
 //   rewind  — прыжки назад на 1 секунду каждые 300мс (HTML5 video не умеет
 //             отрицательную playbackRate, поэтому перемотка назад — интервал)
-//   boost   — ускорение ×2 с warp-эффектом (на паузе видео запускается и
-//             продолжает играть после отпускания)
-//   forward — ускорение ×16, быстрая перемотка вперёд (на паузе видео
-//             запускается временно и по окончании снова встаёт на паузу)
+//   boost   — ускорение ×2 (на паузе видео запускается и продолжает играть
+//             после отпускания)
+//   forward — ускорение ×16 с warp-эффектом, быстрая перемотка вперёд (на
+//             паузе видео запускается временно и по окончании снова встаёт
+//             на паузу). Warp висит именно здесь, а не на ×2: эффект
+//             оправдан только той скоростью, на которой картинка реально
+//             летит.
 //
 // Вынесено отдельно, потому что вызывающих двое: KeyboardHandler (пробел и
 // стрелки ←→) и HoldZoneHandler (зажатие левой кнопки мыши в трёх зонах кадра).
@@ -44,7 +47,7 @@ export class HoldActionRunner {
      * @param getVideo — getter для HTMLVideoElement (может быть undefined)
      * @param seekQueue — общая очередь перемоток (одна на элемент)
      * @param context.getPlaybackRate — скорость, выбранная пользователем
-     * @param context.onWarpStart / onWarpEnd — warp-эффект для boost
+     * @param context.onWarpStart / onWarpEnd — warp-эффект для forward (×16)
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
@@ -95,7 +98,6 @@ export class HoldActionRunner {
             if (videoElement.paused) {
                 safePlay(videoElement);
             }
-            this.context.onWarpStart?.();
             return;
         }
 
@@ -105,6 +107,7 @@ export class HoldActionRunner {
             this.temporarilyPlayed = true;
             safePlay(videoElement);
         }
+        this.context.onWarpStart?.();
     }
 
     /**
@@ -130,7 +133,7 @@ export class HoldActionRunner {
         }
         this.temporarilyPlayed = false;
 
-        if (action === "boost") {
+        if (action === "forward") {
             this.context.onWarpEnd?.();
         }
     }
