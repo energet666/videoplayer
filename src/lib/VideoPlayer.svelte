@@ -557,6 +557,20 @@
   });
 
   // Очистка таймеров и обработчиков при уничтожении компонента
+  // ========================
+  // Правый клик: пауза + сворачивание окна
+  // ========================
+  // Контекстное меню в плеере не нужно, поэтому правая кнопка занята под
+  // «быстро убрать с глаз»: ставим на паузу и сворачиваем окно.
+  // Отложенное переключение паузы от одиночного левого клика снимаем — иначе
+  // связка «клик, затем правый клик» разбудила бы видео уже после сворачивания.
+  function handleContextMenu(e: MouseEvent) {
+    e.preventDefault();
+    clickSeekHandler.cancelPendingToggle();
+    videoElement?.pause();
+    window.electronAPI?.minimizeWindow();
+  }
+
   onDestroy(() => {
     clearTimeout(speedIndicatorTimeout);
     controls.cleanup();
@@ -584,6 +598,7 @@
   Контейнер видеоплеера.
   - cursor-none: скрывает курсор, когда контролы не видны (для кинематографичности)
   - onclick на видео: single click => play/pause, double click => seek ±10s
+  - oncontextmenu: правый клик => пауза и сворачивание окна
   - onmousemove: показывает контролы при движении мыши
   - onmouseleave: прячет контролы при уходе мыши
 -->
@@ -595,6 +610,7 @@
   role="application"
   onmousemove={() => controls.keepAlive()}
   onmouseleave={() => controls.hide()}
+  oncontextmenu={handleContextMenu}
 >
   <!-- HTML5 Video элемент -->
   <!-- svelte-ignore a11y_media_has_caption -->

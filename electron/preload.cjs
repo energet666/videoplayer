@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Показывает главное окно (используется при выходе из режима Picture-in-Picture)
     showWindow: () => ipcRenderer.send('show-window'),
 
+    // Сворачивает окно приложения (правый клик по видео)
+    minimizeWindow: () => ipcRenderer.send('minimize-window'),
+
     // Закрывает окно приложения (кнопка «крестик» в панели управления).
     // Нужна, потому что системных кнопок окна нет (frame: false в main.js).
     closeWindow: () => ipcRenderer.send('close-window'),

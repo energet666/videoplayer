@@ -26,7 +26,7 @@ There is no test framework and no linter. `npm run check` is the verification st
 Two processes, bridged only by a narrow IPC surface:
 
 - **Main** (`electron/main.js`, ESM, Node) — window lifecycle, command-line/file-association handling, IPC handlers.
-- **Preload** (`electron/preload.cjs`, CJS — must stay CJS) — `contextBridge` exposes one flat `window.electronAPI` object: file intake (`getInitialFile`, `onOpenFile`), window sizing and visibility (`resizeWindow`, `hideWindow`, `showWindow`), window controls (`closeWindow`, `toggleFullscreen`, `isFullscreen`, `onFullscreenChange`), and `getPlatform`. Adding an IPC channel means touching three files: `main.js` (handler), `preload.cjs` (bridge method), and `src/vite-env.d.ts` (the `Window.electronAPI` type declaration).
+- **Preload** (`electron/preload.cjs`, CJS — must stay CJS) — `contextBridge` exposes one flat `window.electronAPI` object: file intake (`getInitialFile`, `onOpenFile`), window sizing and visibility (`resizeWindow`, `hideWindow`, `showWindow`, `minimizeWindow`), window controls (`closeWindow`, `toggleFullscreen`, `isFullscreen`, `onFullscreenChange`), and `getPlatform`. Adding an IPC channel means touching three files: `main.js` (handler), `preload.cjs` (bridge method), and `src/vite-env.d.ts` (the `Window.electronAPI` type declaration).
 - **Renderer** (`src/`) — Svelte 5 app. `window.electronAPI` is typed optional (`?`) on purpose: the UI must degrade gracefully when run in a plain browser, so always guard with `if (window.electronAPI)` / `?.`.
 
 ### Renderer layout

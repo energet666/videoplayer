@@ -346,6 +346,15 @@ if (!gotTheLock) {
             }
         });
 
+        // Renderer просит свернуть окно (правый клик по видео).
+        // Именно minimize(), а не hide(): свёрнутое окно остаётся в Dock/панели
+        // задач и возвращается кликом по нему, а спрятанное вернуть нечем.
+        ipcMain.on('minimize-window', () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.minimize();
+            }
+        });
+
         // Renderer просит закрыть окно (кнопка «крестик» в панели управления).
         // Заменяет системную кнопку закрытия, которой нет при frame: false.
         // На Windows/Linux за этим последует window-all-closed → app.quit(),
