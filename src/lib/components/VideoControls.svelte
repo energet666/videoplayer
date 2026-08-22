@@ -5,8 +5,8 @@
   Компонент отображает:
   - Текущее время / общую длительность
   - Прогресс-бар (перемотка мышью)
-  - Кнопку PiP (Picture-in-Picture)
   - Регулятор громкости + кнопку mute
+  - Кнопки управления окном: PiP, полноэкранный режим, закрыть
   
   Панель плавно выезжает снизу при showControls=true и прячется обратно.
   Дизайн: «Liquid Glass» — полупрозрачный размытый фон (backdrop-blur).
@@ -170,15 +170,6 @@
             >{formatTime(duration)}</span
         >
 
-        <!-- Кнопка PiP (Picture-in-Picture) -->
-        <button
-            onclick={onPipToggle}
-            class="text-white/80 hover:text-white transition-colors ml-2"
-            title="Picture in Picture"
-        >
-            {@html icons.pip}
-        </button>
-
         <!-- ===== Блок громкости ===== -->
         <div class="flex items-center gap-2 group/vol shrink-0">
             <!-- Кнопка Mute/Unmute (иконка динамика) -->
@@ -210,10 +201,21 @@
           Раньше поведение расходилось по платформам: на macOS «светофор»
           лежал поверх видео, на Windows кнопок не было совсем.
           Отделены вертикальной чертой, чтобы не путались с контролами видео.
+          PiP стоит в этой же группе: он меняет способ показа окна, а не воспроизведение.
         -->
         <div
             class="flex items-center gap-1 shrink-0 ml-1 pl-3 border-l border-white/15"
         >
+            <!-- PiP (Picture-in-Picture) — тоже режим показа окна, поэтому живёт здесь -->
+            <button
+                onclick={onPipToggle}
+                class="text-white/80 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+                title="Picture in Picture"
+                aria-label="Picture in Picture"
+            >
+                {@html icons.pip}
+            </button>
+
             <!-- Полноэкранный режим (нативный fullscreen окна Electron) -->
             <button
                 onclick={onFullscreenToggle}
