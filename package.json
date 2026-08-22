@@ -36,6 +36,7 @@
   "build": {
     "appId": "com.x-stas-player.app",
     "productName": "X-Stas-Player",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "beforeBuild": "build/beforeBuild.cjs",
     "directories": {
       "output": "release"
@@ -86,6 +87,7 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
+      "artifactName": "${productName}-${version}-${os}-${arch}-Setup.${ext}",
       "oneClick": true,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false
