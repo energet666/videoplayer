@@ -8,10 +8,10 @@
 //   - Зажатие (>200мс) → ускорение ×2 (отпускание — возврат к userPlaybackRate)
 //
 // СТРЕЛКИ ВЛЕВО/ВПРАВО (ArrowLeft / ArrowRight):
-//   - Короткое нажатие → перемотка на ±1 секунду
+//   - Короткое нажатие → перемотка на ±3 секунды
 //   - Зажатие (>200мс):
 //       → Вправо: ускорение ×16 (быстрая перемотка вперёд)
-//       → Влево: прыжки назад на 3 секунды каждые 300мс (имитация перемотки назад)
+//       → Влево: прыжки назад на 1 секунду каждые 300мс (имитация перемотки назад)
 //
 // СТРЕЛКИ ВВЕРХ/ВНИЗ (ArrowUp / ArrowDown):
 //   - Изменение скорости воспроизведения (из массива availableSpeeds)
@@ -19,13 +19,24 @@
 // Принцип "короткое vs длинное нажатие":
 // При keydown запускается таймер на 200мс. Если клавиша отпущена раньше —
 // выполняется "короткое" действие. Если таймер сработал — "длинное" действие.
+//
+// Сами длинные действия (×2, ×16, прыжки назад) живут в hold-actions.ts:
+// их же повторяет удержание левой кнопки мыши по зонам кадра
+// (hold-zones.svelte.ts), и исполнитель у них общий — два удержания сразу
+// невозможны, а скорость всегда возвращается к пользовательской.
 // ============================================================================
 
-import { safePlay, togglePlay } from "./video-actions";
+import { togglePlay } from "./video-actions";
 import type { SeekQueue } from "./seek-queue";
+import type { HoldActionRunner } from "./hold-actions";
 
 // Доступные скорости воспроизведения (переключаются стрелками ↑↓)
 export const availableSpeeds = [1.0, 1.25, 1.5, 2.0];
+
+// Шаг короткого нажатия стрелки. Он крупнее шага удержания (1 секунда,
+// см. hold-actions.ts): нажатием делают точный прыжок через пропущенное место,
+// а удержание подводит к нему плавно.
+const SHORT_SEEK_SECONDS = 3;
 
 export class KeyboardHandler {
     // ========================
@@ -40,9 +51,7 @@ export class KeyboardHandler {
     // ========================
     private isArrowDown = false;             // Стрелка зажата?
     private arrowTimer: ReturnType<typeof setTimeout> | undefined; // Таймер длинного нажатия
-    private seekInterval: ReturnType<typeof setInterval> | undefined; // Интервал для перемотки назад
     private isArrowLongPress = false;        // Длинное нажатие?
-    private arrowRightTemporarilyPlayed = false; // Длинное удержание → временно запустили playback?
 
     /**
      * @param getVideo — функция-getter для получения HTMLVideoElement.
@@ -50,26 +59,25 @@ export class KeyboardHandler {
      *   инициализации handler'а.
      * @param seekQueue — общая очередь перемоток: все жесты ходят через неё,
      *   иначе позиции считаются от разных источников и метка на баре скачет.
+     * @param holdActions — общий исполнитель длинных действий (×2, ×16, прыжки
+     *   назад). Общий с удержанием мыши по зонам кадра.
      * @param context — набор колбэков для взаимодействия с UI-компонентом:
      *   - getPlaybackRate: получить скорость, установленную пользователем
      *   - setPlaybackRate: установить новую скорость
      *   - getDuration: получить длительность видео
      *   - onShowControls: показать контролы
      *   - onShowSpeedIndicator: показать индикатор скорости
-     *   - onWarpStart: начать warp-эффект (ускорение ×2)
-     *   - onWarpEnd: закончить warp-эффект
      */
     constructor(
         private getVideo: () => HTMLVideoElement | undefined,
         private seekQueue: SeekQueue,
+        private holdActions: HoldActionRunner,
         private context: {
             getPlaybackRate: () => number;
             setPlaybackRate: (rate: number) => void;
             getDuration: () => number;
             onShowControls: () => void;
             onShowSpeedIndicator: () => void;
-            onWarpStart?: () => void;
-            onWarpEnd?: () => void;
         }
     ) { }
 
@@ -92,15 +100,8 @@ export class KeyboardHandler {
 
             // Через 200мс считаем это длинным нажатием → ускоряем до ×2
             this.spaceTimer = setTimeout(() => {
-                if (!videoElement) return;
-                videoElement.playbackRate = 2.0;
                 this.isSpaceLongPress = true;
-                // Если видео на паузе — начинаем воспроизведение
-                if (videoElement.paused) {
-                    safePlay(videoElement);
-                }
-                // Запускаем warp-эффект
-                this.context.onWarpStart?.();
+                this.holdActions.start("boost");
             }, 200);
             return;
         }
@@ -143,7 +144,6 @@ export class KeyboardHandler {
                 if (this.isArrowDown) return;
                 this.isArrowDown = true;
                 this.isArrowLongPress = false;
-                this.arrowRightTemporarilyPlayed = false;
 
                 const isRight = e.code === "ArrowRight";
 
@@ -151,30 +151,8 @@ export class KeyboardHandler {
                 this.arrowTimer = setTimeout(() => {
                     this.isArrowLongPress = true;
                     this.context.onShowControls(); // Показываем контролы при перемотке
-
-                    if (!videoElement) return;
-
-                    if (isRight) {
-                        // При зажатии → : ускоряем до ×16 (быстрая перемотка вперёд)
-                        videoElement.playbackRate = 16.0;
-                        if (videoElement.paused) {
-                            this.arrowRightTemporarilyPlayed = true;
-                            safePlay(videoElement);
-                        }
-                    } else {
-                        // При зажатии ← : прыгаем назад на 3 секунды каждые 300мс.
-                        // HTML5 video не поддерживает отрицательную playbackRate,
-                        // поэтому используем setInterval для имитации перемотки назад.
-                        const doRewind = () => {
-                            // Считаем от цели очереди, а не от currentTime: тот
-                            // отстаёт, пока предыдущий прыжок не завершился
-                            this.seekQueue.request(
-                                Math.max(0, this.seekQueue.getTargetTime() - 3),
-                            );
-                        };
-                        doRewind();       // Первый прыжок — сразу
-                        this.seekInterval = setInterval(doRewind, 300); // Далее каждые 300мс
-                    }
+                    // → : ускорение ×16, ← : прыжки назад по 1 секунде
+                    this.holdActions.start(isRight ? "forward" : "rewind");
                 }, 200);
             }
         }
@@ -197,12 +175,8 @@ export class KeyboardHandler {
             clearTimeout(this.spaceTimer);
 
             if (this.isSpaceLongPress) {
-                // Было длинное нажатие — возвращаем скорость к пользовательской
-                if (videoElement) {
-                    videoElement.playbackRate = this.context.getPlaybackRate();
-                }
-                // Останавливаем warp-эффект
-                this.context.onWarpEnd?.();
+                // Было длинное нажатие — возвращаем скорость и гасим warp-эффект
+                this.holdActions.stop();
             } else {
                 // Было короткое нажатие — переключаем паузу
                 togglePlay(videoElement);
@@ -219,31 +193,24 @@ export class KeyboardHandler {
 
             this.isArrowDown = false;
             clearTimeout(this.arrowTimer);
-            clearInterval(this.seekInterval);
 
             if (!this.isArrowLongPress) {
-                // Короткое нажатие → перемотка на ±1 секунду
+                // Короткое нажатие → перемотка на ±3 секунды
                 if (videoElement) {
                     const isRight = e.code === "ArrowRight";
-                    const direction = isRight ? 1 : -1;
+                    const step = isRight ? SHORT_SEEK_SECONDS : -SHORT_SEEK_SECONDS;
                     const duration = this.context.getDuration();
 
                     this.seekQueue.request(
                         Math.max(
                             0,
-                            Math.min(duration, this.seekQueue.getTargetTime() + direction),
+                            Math.min(duration, this.seekQueue.getTargetTime() + step),
                         ),
                     );
                 }
             } else {
                 // Длинное нажатие закончилось — возвращаем нормальную скорость
-                if (videoElement) {
-                    videoElement.playbackRate = this.context.getPlaybackRate();
-                    if (this.arrowRightTemporarilyPlayed) {
-                        videoElement.pause();
-                    }
-                }
-                this.arrowRightTemporarilyPlayed = false;
+                this.holdActions.stop();
                 this.context.onShowControls();
             }
         }
@@ -258,24 +225,12 @@ export class KeyboardHandler {
     handleWindowBlur() {
         if (!this.isSpaceDown && !this.isArrowDown) return;
 
-        const videoElement = this.getVideo();
-
         clearTimeout(this.spaceTimer);
         clearTimeout(this.arrowTimer);
-        clearInterval(this.seekInterval);
 
-        if (videoElement) {
-            // Возвращаем скорость, выбранную пользователем (могла быть ×2 / ×16)
-            videoElement.playbackRate = this.context.getPlaybackRate();
-            // Воспроизведение было включено только ради быстрой перемотки вперёд
-            if (this.arrowRightTemporarilyPlayed) {
-                videoElement.pause();
-            }
-        }
-
-        if (this.isSpaceLongPress) {
-            this.context.onWarpEnd?.();
-        }
+        // Возвращает пользовательскую скорость, гасит интервал перемотки и
+        // warp-эффект (могло быть ×2 / ×16)
+        this.holdActions.stop();
 
         // Короткие действия (пауза по пробелу, перемотка на ±1с) при потере
         // фокуса не выполняем — пользователь ушёл в другое окно, а не нажал клавишу.
@@ -283,7 +238,6 @@ export class KeyboardHandler {
         this.isSpaceLongPress = false;
         this.isArrowDown = false;
         this.isArrowLongPress = false;
-        this.arrowRightTemporarilyPlayed = false;
     }
 
     /**
@@ -293,7 +247,6 @@ export class KeyboardHandler {
     cleanup() {
         clearTimeout(this.spaceTimer);
         clearTimeout(this.arrowTimer);
-        clearInterval(this.seekInterval);
-        this.arrowRightTemporarilyPlayed = false;
+        this.holdActions.stop();
     }
 }

@@ -7,8 +7,9 @@
   2. Управление состоянием воспроизведения (пауза, громкость, время, скорость)
   3. Показ/скрытие контролов (с автоскрытием через 1 секунду)
   4. Обработку клавиатурных сочетаний (через KeyboardHandler)
-  5. Обработку жестов тачпада (через TouchpadHandler) и перемотку
-     перетаскиванием мыши (через DragSeekHandler)
+  5. Обработку жестов тачпада (через TouchpadHandler), перемотку
+     перетаскиванием мыши (через DragSeekHandler) и удержание левой кнопки
+     по трём зонам кадра (через HoldZoneHandler)
   6. Авто-ресайз окна Electron под размер видео
   7. Режим PiP (Picture-in-Picture)
   ============================================================================
@@ -28,6 +29,8 @@
   import { KeyboardHandler } from "./logic/keyboard.svelte";
   import { TouchpadHandler } from "./logic/touchpad.svelte";
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
+  import { HoldActionRunner } from "./logic/hold-actions";
+  import { HoldZoneHandler, type HoldZone } from "./logic/hold-zones.svelte";
   import { SeekQueue } from "./logic/seek-queue";
 
   // Пропсы: URL видеофайла, передаётся из App.svelte
@@ -105,6 +108,11 @@
   let dragSeekDelta = $state(0); // Смещение от точки начала жеста (секунды)
   let dragSeekTarget = $state(0); // Время, к которому перематываем
 
+  // ========================
+  // Удержание левой кнопки по зонам кадра
+  // ========================
+  let holdZone = $state<HoldZone | null>(null); // Активная зона удержания (null — нет)
+
   /**
    * Показывает контролы и запускает таймер автоскрытия.
    * Вызывается при движении мыши, нажатии клавиш и скролле тачпада.
@@ -130,27 +138,14 @@
   const seekQueue = new SeekQueue(() => videoElement);
 
   // ========================
-  // Инициализация обработчика клавиатуры
+  // Длинные действия (×2, ×16, прыжки назад)
   // ========================
-  // KeyboardHandler управляет всеми клавиатурными сочетаниями.
-  // Передаём getter для videoElement (может быть undefined при инициализации)
-  // и набор колбэков для управления состоянием UI.
-  const keyboardHandler = new KeyboardHandler(() => videoElement, seekQueue, {
+  // Один исполнитель на плеер: и клавиатура, и удержание мыши по зонам кадра
+  // ходят через него, поэтому два удержания одновременно невозможны, а скорость
+  // всегда возвращается к пользовательской (см. hold-actions.ts).
+  const holdActions = new HoldActionRunner(() => videoElement, seekQueue, {
     getPlaybackRate: () => userPlaybackRate,
-    setPlaybackRate: (rate: number) => {
-      userPlaybackRate = rate;
-    },
-    getDuration: () => duration,
-    onShowControls: handleMouseMove,
-    // При изменении скорости показываем индикатор "1.5x" на 500мс
-    onShowSpeedIndicator: () => {
-      showSpeedIndicator = true;
-      clearTimeout(speedIndicatorTimeout);
-      speedIndicatorTimeout = setTimeout(() => {
-        showSpeedIndicator = false;
-      }, 500);
-    },
-    // Warp-эффект при ускорении ×2 (зажатый пробел)
+    // Warp-эффект при ускорении ×2 (зажатый пробел / центр кадра)
     onWarpStart: () => {
       isWarpActive = true;
     },
@@ -158,6 +153,34 @@
       isWarpActive = false;
     },
   });
+
+  // ========================
+  // Инициализация обработчика клавиатуры
+  // ========================
+  // KeyboardHandler управляет всеми клавиатурными сочетаниями.
+  // Передаём getter для videoElement (может быть undefined при инициализации)
+  // и набор колбэков для управления состоянием UI.
+  const keyboardHandler = new KeyboardHandler(
+    () => videoElement,
+    seekQueue,
+    holdActions,
+    {
+      getPlaybackRate: () => userPlaybackRate,
+      setPlaybackRate: (rate: number) => {
+        userPlaybackRate = rate;
+      },
+      getDuration: () => duration,
+      onShowControls: handleMouseMove,
+      // При изменении скорости показываем индикатор "1.5x" на 500мс
+      onShowSpeedIndicator: () => {
+        showSpeedIndicator = true;
+        clearTimeout(speedIndicatorTimeout);
+        speedIndicatorTimeout = setTimeout(() => {
+          showSpeedIndicator = false;
+        }, 500);
+      },
+    },
+  );
 
   // ========================
   // Инициализация обработчика тачпада
@@ -198,6 +221,34 @@
     },
     onSeekEnd: () => {
       isDragSeeking = false;
+      isDragging = false;
+      handleMouseMove(); // Запускаем автоскрытие контролов заново
+    },
+  });
+
+  // ========================
+  // Инициализация удержания по зонам кадра
+  // ========================
+  // HoldZoneHandler делит кадр на три вертикальные полосы и повторяет зажатием
+  // левой кнопки то же, что делают зажатые ← / пробел / → (см. hold-zones.svelte.ts).
+  const holdZoneHandler = new HoldZoneHandler(() => videoElement, holdActions, {
+    getBounds: () => videoContainer?.getBoundingClientRect(),
+    onHoldStart: (zone) => {
+      // Отменяем отложенный play/pause от предыдущего клика: серия
+      // "клик + удержание" не должна закончиться паузой
+      clearTimeout(clickTimeout);
+      holdZone = zone;
+      // При перемотке (крайние зоны) держим контролы на экране: мышь не
+      // двигается, и без этого прогресс-бар спрятался бы через секунду.
+      // В центре — ускорение ×2, там контролы не нужны (как с пробелом).
+      if (zone !== "center") {
+        isDragging = true;
+        showControls = true;
+        clearTimeout(controlsTimeout);
+      }
+    },
+    onHoldEnd: () => {
+      holdZone = null;
       isDragging = false;
       handleMouseMove(); // Запускаем автоскрытие контролов заново
     },
@@ -273,9 +324,12 @@
   function handleVideoClick(event: MouseEvent) {
     if (!videoElement) return;
 
-    // Click после перемотки перетаскиванием игнорируем, иначе каждый жест
-    // заканчивался бы паузой
-    if (dragSeekHandler.shouldSuppressClick()) return;
+    // Click после перемотки перетаскиванием или удержания зоны игнорируем,
+    // иначе каждый жест заканчивался бы паузой.
+    // Спрашиваем оба обработчика: флаг у каждого свой и одноразовый.
+    const suppressedByHold = holdZoneHandler.shouldSuppressClick();
+    const suppressedByDrag = dragSeekHandler.shouldSuppressClick();
+    if (suppressedByHold || suppressedByDrag) return;
 
     const clickCountInSeries = event.detail;
     clearTimeout(clickTimeout);
@@ -345,7 +399,13 @@
   // событие timeupdate редкое. На паузе кадровый опрос не нужен — просто
   // повторяем реальную позицию.
   $effect(() => {
-    if (paused && !isDragSeeking && !isTouchpadSeeking && !isDragging) {
+    if (
+      paused &&
+      !isDragSeeking &&
+      !isTouchpadSeeking &&
+      !isDragging &&
+      !holdZone
+    ) {
       displayTime = currentTime;
       return;
     }
@@ -372,17 +432,35 @@
   $effect(() => {
     if (!videoElement) return;
 
-    const onPointerDown = (e: PointerEvent) =>
+    // Левая кнопка одна на два жеста: удержание по зонам и перемотка
+    // перетаскиванием. Оба слушают нажатие, а дальше расходятся по времени и
+    // расстоянию — ушёл дальше 6px раньше 200мс — драг, продержал 200мс — зона.
+    const onPointerDown = (e: PointerEvent) => {
+      holdZoneHandler.handlePointerDown(e);
       dragSeekHandler.handlePointerDown(e);
-    const onPointerMove = (e: PointerEvent) =>
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      holdZoneHandler.handlePointerMove(e);
+      // Удержание уже началось — движение мыши не должно превращаться в
+      // перемотку перетаскиванием
+      if (holdZoneHandler.isActive()) return;
       dragSeekHandler.handlePointerMove(e);
-    const onPointerUp = (e: PointerEvent) => dragSeekHandler.handlePointerUp(e);
-    const onPointerCancel = (e: PointerEvent) =>
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      holdZoneHandler.handlePointerUp(e);
+      dragSeekHandler.handlePointerUp(e);
+    };
+    const onPointerCancel = (e: PointerEvent) => {
+      holdZoneHandler.handlePointerCancel(e);
       dragSeekHandler.handlePointerCancel(e);
+    };
     const onKeyDown = (e: KeyboardEvent) => dragSeekHandler.handleKeyDown(e);
     // Захват указателя потерян (окно ушло из фокуса, система забрала жест) —
-    // завершаем перемотку, иначе она "залипнет" до следующего pointerdown
-    const onInterrupt = () => dragSeekHandler.handleInterrupt();
+    // завершаем жест, иначе он "залипнет" до следующего pointerdown
+    const onInterrupt = () => {
+      holdZoneHandler.handleInterrupt();
+      dragSeekHandler.handleInterrupt();
+    };
 
     // Очередь перемоток: следующая позиция применяется, когда видео отработало
     // предыдущую (см. seek-queue.ts)
@@ -431,6 +509,7 @@
     clearTimeout(seekFeedbackTimeout);
     clearTimeout(touchpadSeekTimeout);
     keyboardHandler.cleanup();
+    holdZoneHandler.cleanup();
     dragSeekHandler.cleanup();
   });
 </script>
@@ -443,6 +522,7 @@
     // Окно ушло из фокуса: keyup и pointerup до нас не дойдут — сбрасываем
     // зажатые клавиши и текущий жест перемотки вручную
     keyboardHandler.handleWindowBlur();
+    holdZoneHandler.handleInterrupt();
     dragSeekHandler.handleInterrupt();
   }}
 />
