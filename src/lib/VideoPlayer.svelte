@@ -31,7 +31,7 @@
   import { DragSeekHandler } from "./logic/drag-seek.svelte";
   import { HoldActionRunner } from "./logic/hold-actions";
   import { HoldZoneHandler, type HoldZone } from "./logic/hold-zones.svelte";
-  import { SeekQueue } from "./logic/seek-queue";
+  import { SeekQueue } from "./logic/seek-queue.svelte";
   import { PlaybackRecovery } from "./logic/recovery";
   import { debugLog } from "./logic/debug-log";
 
@@ -462,7 +462,16 @@
       !isDragging &&
       !holdZone
     ) {
-      displayTime = currentTime;
+      // На паузе позицию двигает только timeupdate, а он приходит уже после
+      // того, как seek завершится. Поэтому пока в очереди есть неотработанная
+      // перемотка, ведём метку за её целью: клик по таймлайну на паузе иначе
+      // кидал метку вперёд (пока держим кнопку — жест ведёт за целью), назад
+      // (отпустили: currentTime ещё старый) и снова вперёд, когда видео
+      // доезжало. currentTime читаем всегда — он же зависимость эффекта.
+      const realTime = currentTime;
+      displayTime = seekQueue.isSeekPending()
+        ? seekQueue.getTargetTime()
+        : realTime;
       return;
     }
 

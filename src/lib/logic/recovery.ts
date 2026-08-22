@@ -29,7 +29,7 @@
 
 import { safePlay } from "./video-actions";
 import { debugLog } from "./debug-log";
-import type { SeekQueue } from "./seek-queue";
+import type { SeekQueue } from "./seek-queue.svelte";
 
 // Сколько ждать завершения перемотки, прежде чем считать элемент залипшим.
 // Обычный seek по локальному файлу укладывается в десятки миллисекунд, так что

@@ -1,5 +1,5 @@
 // ============================================================================
-// seek-queue.ts — Очередь перемоток для <video>
+// seek-queue.svelte.ts — Очередь перемоток для <video>
 // ============================================================================
 // Общая для всех жестов перемотки (мышь, тачпад): элемент получает не больше
 // одной перемотки за раз.
@@ -16,12 +16,14 @@
 import { debugLog } from "./debug-log";
 
 export class SeekQueue {
-    // Позиция, которая ждёт своей очереди (null — очередь пуста)
-    private pending: number | null = null;
+    // Позиция, которая ждёт своей очереди (null — очередь пуста).
+    // $state — за состоянием очереди следит отрисовка прогресс-бара
+    // (см. isSeekPending() и displayTime в VideoPlayer.svelte).
+    private pending = $state<number | null>(null);
 
     // Последняя запрошенная позиция. Живёт дольше pending: элемент получил её,
     // но currentTime догонит только когда seek завершится.
-    private target: number | null = null;
+    private target = $state<number | null>(null);
 
     /**
      * @param getVideo — getter для HTMLVideoElement (может быть undefined)
@@ -45,6 +47,20 @@ export class SeekQueue {
         if (videoElement.seeking && this.target !== null) return this.target;
 
         return videoElement.currentTime;
+    }
+
+    /**
+     * Есть ли неотработанная перемотка: позиция уже запрошена, а currentTime
+     * элемента до неё ещё не доехал.
+     *
+     * Нужна отрисовке: на паузе метку на баре ведёт currentTime, но он
+     * обновляется только по timeupdate — то есть уже после того, как seek
+     * завершится. Без этой проверки клик по таймлайну на паузе кидал метку
+     * вперёд (запрошенная позиция), потом назад (старый currentTime) и снова
+     * вперёд, когда видео доезжало.
+     */
+    isSeekPending(): boolean {
+        return this.pending !== null || this.target !== null;
     }
 
     /**

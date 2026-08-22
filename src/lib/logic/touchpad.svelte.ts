@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { debugLog } from "./debug-log";
-import type { SeekQueue } from "./seek-queue";
+import type { SeekQueue } from "./seek-queue.svelte";
 
 export class TouchpadHandler {
     // Коэффициент чувствительности: сколько секунд перемотки на 1 пиксель deltaX.

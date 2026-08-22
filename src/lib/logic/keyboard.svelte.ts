@@ -27,7 +27,7 @@
 // ============================================================================
 
 import { togglePlay } from "./video-actions";
-import type { SeekQueue } from "./seek-queue";
+import type { SeekQueue } from "./seek-queue.svelte";
 import type { HoldActionRunner } from "./hold-actions";
 
 // Доступные скорости воспроизведения (переключаются стрелками ↑↓)

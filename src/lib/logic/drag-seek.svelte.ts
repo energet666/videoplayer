@@ -20,7 +20,7 @@
 // ============================================================================
 
 import { safePlay } from "./video-actions";
-import type { SeekQueue } from "./seek-queue";
+import type { SeekQueue } from "./seek-queue.svelte";
 
 export class DragSeekHandler {
     // Сколько секунд перемотки даёт 1 пиксель движения мыши.
