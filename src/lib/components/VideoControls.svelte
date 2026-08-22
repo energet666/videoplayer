@@ -242,8 +242,11 @@
                  панели в DOM, поэтому mouseleave панели при переходе к нему не
                  срабатывает и контролы не прячутся из-под курсора. -->
             <div class="relative group/speed">
+                <!-- w-11 — фиксированная ширина под самую длинную подпись ("1.25×").
+                     С min-w-7 кнопка меняла ширину при выборе скорости и вся
+                     правая часть панели (кнопки окна) сдвигалась. -->
                 <button
-                    class="text-white/80 hover:text-white transition-colors text-xs font-semibold tabular-nums p-1 rounded-lg hover:bg-white/10 flex items-center justify-center h-7 min-w-7"
+                    class="text-white/80 hover:text-white transition-colors text-xs font-semibold tabular-nums py-1 rounded-lg hover:bg-white/10 flex items-center justify-center h-7 w-11"
                     title="Скорость воспроизведения (↑ / ↓)"
                     aria-label="Скорость воспроизведения"
                 >
